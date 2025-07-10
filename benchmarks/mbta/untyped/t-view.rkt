@@ -15,6 +15,7 @@
 
 ;; ===================================================================================================
 (require
+ trace-contract
  ; "t-graph.rkt"
  "../../../ctcs/precision-config.rkt"
  "../../../ctcs/common.rkt"
@@ -66,7 +67,8 @@
           [types string?])]
  [SWITCH ([max "---switch from ~a to ~a"]
           [types string?])]
- [manage% ([max manage-c/max-ctc]
+ [manage% (#;[trace manage-c/trace-ctc]
+           [max manage-c/max-ctc]
            #;[max/sub1 manage-c/max/sub1-ctc]
            [types manage-c/types-ctc])])
 
@@ -114,6 +116,39 @@
 
 (define SWITCH
   "---switch from ~a to ~a")
+
+;; ---------------------------------------------------------------------------------------------------
+
+(define (in-path-before-reenable? station s)
+  (match s
+    [(stream) #f]
+    [(stream* `(disable ,_disabled-s) rest)
+     (in-path-before-reenable? station rest)]
+    [(stream* `(enable ,_enabled-s) _rest) #f]
+    [(stream* `(find ,path) rest)
+     (or (and (string-contains? path station)
+              (not string-contains? path "impossible")
+              (not string-contains? path "tap your heels"))
+         (in-path-before-reenable? station rest))]))
+
+(define/match (no-disabled-in-found-paths? _s)
+  [((stream)) #t]
+  [((stream* `(disable ,station) rest))
+   (and (not (in-path-before-reenable? station rest))
+        (no-disabled-in-found-paths? rest))]
+  [((stream* _ rest))
+   (no-disabled-in-found-paths? rest)])
+
+(define/ctc-helper manage-c/trace-ctc
+  (trace/c ([t string?])
+           (class/c
+            [add-to-disabled
+             (-> any/c (list/t 'disable t) (or/c false/c string?))]
+            [remove-from-disabled
+             (-> any/c (list/t 'enable t) (or/c false/c string?))]
+            [find
+             (-> any/c string? string? (list/t 'find t))])
+           (full (t) no-disabled-in-found-paths?)))
 
 ;; ---------------------------------------------------------------------------------------------------
 
@@ -260,10 +295,9 @@
 
 
 (define manage%
-  (class object% 
+  (class object%
     (super-new)
-    
-    (field 
+    (field
      ;; [instance-of MBTA%]
      [mbta-subways (read-t-graph)]
      ;; [Listof Station]
@@ -276,7 +310,7 @@
         [(string? station) (set! disabled (cons station disabled)) #f]
         [(empty? station) (format DISABLED-0 s)]
         [else (format DISABLED (string-join station))]))
-    
+
     ;; -----------------------------------------------------------------------------------------------
     (define/public (remove-from-disabled s)
       (define station (send mbta-subways station s))
@@ -312,7 +346,7 @@
     
     ;; -----------------------------------------------------------------------------------------------
     (define/private (removed-paths-with-disabled-stations paths*)
-      (for/list ([p paths*] 
+      (for/list ([p paths*]
                  #:unless ;; any of the disabled stations is on the path 
                  (let ([stations (map first p)]) 
                    (for/or ((s stations)) (member s disabled))))
