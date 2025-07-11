@@ -332,8 +332,7 @@
     ;; -----------------------------------------------------------------------------------------------
     (define/public (add-to-disabled s)
       (define station (send mbta-subways station s))
-      #f
-      #;(cond
+      (cond
         [(string? station) (set! disabled (cons station disabled)) #f]
         [(empty? station) (format DISABLED-0 s)]
         [else (format DISABLED (string-join station))]))
