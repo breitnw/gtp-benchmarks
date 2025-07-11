@@ -126,6 +126,8 @@
   [(_station (stream* (list 'enable _station) _rest)) #f]
   [(_ (stream* `(find ,path) rest))
    (or (and (string-contains? path station)
+            (not (string-contains? path "no such"))
+            (not (string-contains? path "disambiguate"))
             (not (string-contains? path "impossible"))
             (not (string-contains? path "tap your heels")))
        (in-path-before-reenable? station rest))]
