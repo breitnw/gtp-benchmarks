@@ -1,5 +1,7 @@
 #lang racket
 
+(define-syntax ctc-level 'trace)
+
 ;; implement the view (renderer) for the T path finder
 
 ;; (provide 
@@ -67,7 +69,7 @@
           [types string?])]
  [SWITCH ([max "---switch from ~a to ~a"]
           [types string?])]
- [manage% (#;[trace manage-c/trace-ctc]
+ [manage% ([trace manage-c/trace-ctc]
            [max manage-c/max-ctc]
            #;[max/sub1 manage-c/max/sub1-ctc]
            [types manage-c/types-ctc])])
@@ -119,23 +121,27 @@
 
 ;; ---------------------------------------------------------------------------------------------------
 
-(define (in-path-before-reenable? station s)
-  (match s
-    [(stream) #f]
-    [(stream* `(disable ,_disabled-s) rest)
-     (in-path-before-reenable? station rest)]
-    [(stream* `(enable ,_enabled-s) _rest) #f]
-    [(stream* `(find ,path) rest)
-     (or (and (string-contains? path station)
-              (not string-contains? path "impossible")
-              (not string-contains? path "tap your heels"))
-         (in-path-before-reenable? station rest))]))
+(define/match (in-path-before-reenable? station s)
+  [(_ (stream)) #f]
+  [(_station (stream* (list 'enable _station) _rest)) #f]
+  [(_ (stream* `(find ,path) rest))
+   (or (and (string-contains? path station)
+            (not (string-contains? path "impossible"))
+            (not (string-contains? path "tap your heels")))
+       (in-path-before-reenable? station rest))]
+  [(_ (stream* _ rest))
+   (in-path-before-reenable? station rest)])
 
 (define/match (no-disabled-in-found-paths? _s)
   [((stream)) #t]
+  ;; failed disable: multiple or zero candidates
+  [((stream* `(disable (,_stations ...)) rest))
+   (no-disabled-in-found-paths? rest)]
+  ;; successful disable
   [((stream* `(disable ,station) rest))
    (and (not (in-path-before-reenable? station rest))
         (no-disabled-in-found-paths? rest))]
+  ;; skip any other action
   [((stream* _ rest))
    (no-disabled-in-found-paths? rest)])
 
@@ -143,11 +149,31 @@
   (trace/c ([t string?])
            (class/c
             [add-to-disabled
-             (-> any/c (list/t 'disable t) (or/c false/c string?))]
-            [remove-from-disabled
-             (-> any/c (list/t 'enable t) (or/c false/c string?))]
+             (->i ([self any/c]
+                   ;; Add the _full name_ of the station to the trace. This is
+                   ;; necessary since we can disable and re-enable a station
+                   ;; with two entirely different name fragments. Our trace
+                   ;; predicate, therefore, needs to know that these two
+                   ;; fragments represent the same station.
+                   [station (self) (list/t 'disable
+                                           (map/t (λ (input)
+                                                    (send (get-field mbta-subways self)
+                                                          station
+                                                          input)) t))])
+                  [result (or/c false/c string?)])]
+            (remove-from-disabled
+             (->i ([self any/c]
+                   ;; Like add-to-disabled
+                   [station (self) (list/t 'enable
+                                           (map/t (λ (input)
+                                                    (send (get-field mbta-subways self)
+                                                          station
+                                                          input)) t))])
+                  [result (or/c false/c string?)]))
             [find
-             (-> any/c string? string? (list/t 'find t))])
+             (-> any/c string? string? (list/t 'find t))]
+            (field [mbta-subways (instanceof/c mbta%/c)]
+                   [disabled (listof station?)]))
            (full (t) no-disabled-in-found-paths?)))
 
 ;; ---------------------------------------------------------------------------------------------------
@@ -306,7 +332,8 @@
     ;; -----------------------------------------------------------------------------------------------
     (define/public (add-to-disabled s)
       (define station (send mbta-subways station s))
-      (cond
+      #f
+      #;(cond
         [(string? station) (set! disabled (cons station disabled)) #f]
         [(empty? station) (format DISABLED-0 s)]
         [else (format DISABLED (string-join station))]))

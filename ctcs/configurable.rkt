@@ -13,7 +13,7 @@
 
 (begin-for-syntax
   (define files-with-provide-configurable (mutable-set))
-  (define enabled-ctc-levels '(none types max))
+  (define enabled-ctc-levels '(none types max trace))
   (define-syntax-class ctc-map-clause
     #:attributes [level ctc]
     (pattern [level:id ctc:expr]
@@ -23,8 +23,9 @@
     #:attributes [[clause 1] map]
     (pattern {clause:ctc-map-clause ...}
              ;; ctc-map? := (hash/c id? syntax?)
-             #:attr map (hash-set (for/hash ([level (in-list (attribute clause.level))]
-                                             [ctc (in-list (attribute clause.ctc))])
+             ;; HACK: 'trace defaults to 'any/c when there isn't a specification
+             #:attr map (hash-set (for/hash ([level (in-list (cons #'trace (attribute clause.level)))]
+                                             [ctc (in-list (cons #'any/c (attribute clause.ctc)))])
                                     (values (syntax->datum level) ctc))
                                   'none
                                   #'any/c)))
