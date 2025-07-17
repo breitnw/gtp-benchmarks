@@ -26,12 +26,11 @@
 (require (only-in "card-pool.rkt"
   create-card-pool
 ))
-(require (only-in "deck.rkt"
-  create-deck
-))
 (require (only-in "player.rkt"
   player%
 ))
+(require "../../../ctcs/configurable.rkt")
+(require/configurable-contract "deck.rkt" create-deck)
 ;; ---------------------------------------------------------------------------------------------------
 
 ;; TODO should not need to supply this

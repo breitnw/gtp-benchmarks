@@ -150,7 +150,7 @@
 (define/ctc-helper manage-c/trace-ctc
   (trace/c ([t string?])
            (class/c
-            [add-to-disabled
+            (add-to-disabled
              (->i ([self any/c]
                    ;; Add the _full name_ of the station to the trace. This is
                    ;; necessary since we can disable and re-enable a station
@@ -162,7 +162,7 @@
                                                     (send (get-field mbta-subways self)
                                                           station
                                                           input)) t))])
-                  [result (or/c false/c string?)])]
+                  [result (or/c false/c string?)]))
             (remove-from-disabled
              (->i ([self any/c]
                    ;; Like add-to-disabled
@@ -172,8 +172,8 @@
                                                           station
                                                           input)) t))])
                   [result (or/c false/c string?)]))
-            [find
-             (-> any/c string? string? (list/t 'find t))]
+            (find
+             (-> any/c string? string? (list/t 'find t)))
             (field [mbta-subways (instanceof/c mbta%/c)]
                    [disabled (listof station?)]))
            (full (t) no-disabled-in-found-paths?)))
