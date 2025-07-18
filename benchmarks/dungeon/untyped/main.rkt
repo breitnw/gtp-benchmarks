@@ -64,11 +64,11 @@
 (require (only-in "utils.rkt"
 ;;   random-between
 ;;   random-from
-;;   random
+;;   random-upto
 ;;   reset!
   random-result-between/c
 ))
-(require/configurable-contract "utils.rkt" reset! #;random random-from random-between )
+(require/configurable-contract "utils.rkt" reset! random-upto random-from random-between)
 
 ;; (provide/configurable-contract
 ;;  [N exact-nonnegative-integer?]
@@ -229,7 +229,7 @@
 
 ;; -----------------------------------------------------------------------------
 
-(define N 1)
+(define N 5)
 
 (define wall-cache
   ;; #:mutable
@@ -282,12 +282,12 @@
                   [(== up) (+ (- x height) 1)]
                   ;; have the entrance be at a random position on the
                   ;; entrance-side wall
-                  [else    (sub1 (- x (random (- height 2))))]))
+                  [else    (sub1 (- x (random-upto (- height 2))))]))
   (define min-y (match direction
                   ;; same idea as for x
                   [(== right) y]
                   [(== left)  (+ (- y width) 1)]
-                  [else       (sub1 (- y (random (- width 2))))]))
+                  [else       (sub1 (- y (random-upto (- width 2))))]))
   (define max-x (+ min-x height))
   (define max-y (+ min-y width))
   (define-values (success? poss->cells free-cells extension-points)
@@ -350,7 +350,9 @@
   ; higher than that (7 11) is hard to fit
   (define w (assert (random-between 7 11) index?))
   (define h (assert (random-between 7 11) index?))
-  (try-add-rectangle grid pos w h dir))
+  (let [ (r (try-add-rectangle grid pos w h dir)) ]
+    (displayln (format "w/h: (~a ~a), room: ~a" w h r))
+    r))
 
 (define (new-corridor grid pos dir)
   (define h? (horizontal? dir))
@@ -363,7 +365,9 @@
         (random-between 5 8)) index?))
   (define h (if h? 3   len))
   (define w (if h? len 3))
-  (try-add-rectangle grid pos h w dir))
+  (let [ (r (try-add-rectangle grid pos w h dir)) ]
+    (displayln (format "w/h: (~a ~a), corr: ~a" w h r))
+    r))
 
 
 (define/ctc-helper (door-count grid)
@@ -396,15 +400,15 @@
   ;;                                      grid?)
 
   ;; a room for each encounter, and a few empty ones
-  (define n-rooms (max (length encounters) (random-between 6 9)))
+  (define n-rooms (max (length encounters) (random-between 3 7)))
   (define grid
      (build-array (vector dungeon-height dungeon-width)
                   (lambda _ (new void-cell%))))
   (define first-room
     (let loop  ()
       (define starting-point
-        (vector (assert (random dungeon-height) index?)
-                (assert (random dungeon-width) index?)))
+        (vector (assert (random-upto dungeon-height) index?)
+                (assert (random-upto dungeon-width) index?)))
       (define first-room
         (new-room grid starting-point (random-direction)))
       (or first-room (loop)))) ; if it doesn't fit, try again
@@ -450,7 +454,7 @@
         (match-define `(,ext . ,origin-room) (random-from extension-points))
         ;; first, try branching a corridor at random
         (define dir (random-direction))
-        (cond [(and (zero? (random 4)) ; maybe add a room directly, no corridor
+        (cond [(and (zero? (random-upto 4)) ; maybe add a room directly, no corridor
                     (new-room grid ext dir)) =>
                (lambda (room) (add-room origin-room room ext))]
               [(new-corridor grid ext dir) =>
@@ -619,12 +623,15 @@
 
 (define LOOPS 1)
 
-(define (main)
+#;(define (main)
   (for ((_i (in-range LOOPS)))
     (show-grid (smooth-walls (generate-dungeon (range N))))
     (reset!)))
 
-(time (void (main)))
+(define (main)
+  (show-grid (generate-dungeon (range N))))
+
+(time (display (main)))
 ;; Change `void` to `display` to test. Should see:
 ;;............................................................
 ;;............................................................

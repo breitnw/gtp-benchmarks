@@ -12,18 +12,14 @@
 )
 
 (provide/configurable-contract
- [orig ([max any/c]
-        [types any/c])]
- [r* ([max any/c]
-      [types any/c])]
- [reset! ([max (->* ()
-                    void?
-                    #:post (equal? (unbox r*) orig))]
+ 
+ 
+ [reset! ([max (-> void?)]
           [types (-> void?)])]
- #;[random ([max (->i ([n exact-nonnegative-integer?])
-                    [result (n) (and/c exact-nonnegative-integer?
-                                       (</c n))])]
-          [types (any/c . -> . exact-nonnegative-integer?)])]
+ [random-upto ([max (->i ([n exact-nonnegative-integer?])
+                         [result (n) (and/c exact-nonnegative-integer?
+                                            (</c n))])]
+               [types (any/c . -> . exact-nonnegative-integer?)])]
  [article ([max (->* (boolean? boolean?)
                      [#:an? boolean?]
                      (apply or/c (list+titlecases "the" "an" "a")))]
@@ -60,23 +56,15 @@
 
 ;; =============================================================================
 
-(define orig
-  '(2 10 24 3 0 2 10 45 2 2 2 2 49 3 1 5 1 0 0 2 1 0 2 1 0 0 2 2 5 0 0 0 3 0 1 2
-      0 3 0 0 2 2 0 2 2 0 0 3 0 0 2 0 3 1 0 2 0 0 1 1 0 2 0 0 3 0 0 1 2 0 3 1 0
-      2 0 0 0 1 3 1 1 0 1 2 0 3 2 0 1 2 0 1 1 0 2 2 0 1 1 0 2 2 0 0 0 2 1 0 0 0 
-      0 3 4 0 0 2 1 0 2 1 0 3 1 0 1 0 0 1 0 0 1 2 0 1 0 0 2 2 0 2 2 0 3 1 0 1 0 
-      0 1 1 0 2 1 0 3 2 0 3 0 0 2 2 0 0 0 3 4 2 0 3 0 0 3 1 0 0 3 0 4 0 0 2 0 0 
-      2 2 0 2 1 0 0 0 3 6 1 0 3 0 0 0 2 1 3 0 0 3 1 0 1 1 0 2 0 0 3 2 0 2 1 0 1
-      2 0 0 3 0 2 2 0 2 2 0 2 2 0 1 1 0 3 1 0 2 1 0 1 2 0 0 2 0 3 1 0 1 1 0 2 2 
-      0 2 2 0 1 5 3 3 2 1))
-(define r* (box orig))
+(define rng (vector->pseudo-random-generator '#(42 10 23 89 67 91)))
 
 (define (reset!)
-  (set-box! r* orig))
+  (set! rng (vector->pseudo-random-generator '#(01 54 23 89 67 10))))
 
 ;; Non-specific ctc because this random stuff is rigged to be deterministic
-(define (random n)
-  (begin0 (car (unbox r*)) (set-box! r* (cdr (unbox r*)))))
+(define (random-upto n)
+  #;(displayln (format "(random-upto ~a)" n))
+  (random n rng))
 
 (define/ctc-helper (list+titlecases . los)
   (append los
@@ -97,7 +85,8 @@
          (<=/c max)))
 
 (define (random-between min max) ;; TODO replace with 6.4's `random`
-  (+ min (random (- max min))))
+  #;(displayln (format "(random ~a ~a)" min max))
+  (random min max rng))
 
 (define (d6)
   (random-between 1 7))
@@ -106,7 +95,4 @@
   (random-between 1 21))
 
 (define (random-from l)
-  (first (shuffle l)))
-
-(define (shuffle l)
-  (reverse l))
+  (list-ref l (random (length l) rng)))
