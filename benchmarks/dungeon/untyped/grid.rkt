@@ -5,20 +5,24 @@
   require-typed-check
   ;math/array ;; TODO it'd be nice to use this
  racket/contract
+ trace-contract
  (only-in "../../../ctcs/common.rkt" or-#f/c)
  "../../../ctcs/configurable.rkt"
  "../../../ctcs/precision-config.rkt"
 )
+
 (require (only-in "cell.rkt"
 ;;   char->cell%
 ;;   void-cell%
   cell%?
-  class-equal?
 ))
-(require/configurable-contract "cell.rkt" void-cell% char->cell% )
+(require/configurable-contract "cell.rkt" void-cell% char->cell% empty-cell% cell% wall% door%)
+
+(define-syntax ctc-level 'trace)
 
 (provide/configurable-contract
- [array-set! ([max (->i ([g (arrayof cell%?)]
+ [array-set! ([trace array-set!-c/trace-ctc]
+              [max (->i ([g (arrayof cell%?)]
                          [p array-coord?]
                          [v cell%?])
                         [result void?]
@@ -145,6 +149,29 @@
 ;; a Grid is a math/array Mutable-Array of cell%
 ;; (mutability is required for dungeon generation)
 (define/ctc-helper grid? (arrayof cell%?))
+
+(define (allowed-transition? from% to%)
+  (define allowed-transitions
+    `((,void-cell% . ,cell%) ;; void cell can become any other cell type
+      (,wall% . ,door%)))    ;; walls can only be converted into doors
+  (for/or ([transition allowed-transitions])
+    (match-define (cons super-from% super-to%) transition)
+    (and (subclass? from% super-from%)
+         (subclass? to% super-to%))))
+
+(define/ctc-helper array-set!-c/trace-ctc
+  (trace/c ([g grid?]
+            [p array-coord?]
+            [v cell%?])
+           (g p v . -> . void?)
+           (accumulate (hash)
+                       [(g p v)
+                        (λ (tr grid posn cell)
+                          (define-values (cell-class _) (object-info cell))
+                          (if (and (hash-has-key? tr posn)
+                                   (not (allowed-transition? (hash-ref tr posn) cell-class)))
+                              (fail)
+                              (hash-set tr posn cell-class)))])))
 
 ;; parses a list of strings into a grid, based on the printed representation
 ;; of each cell

@@ -229,7 +229,7 @@
 
 ;; -----------------------------------------------------------------------------
 
-(define N 5)
+(define N 1)
 
 (define wall-cache
   ;; #:mutable
@@ -478,7 +478,7 @@
               [else ; didn't fit, try again
                (values n-rooms-to-go rooms extension-points)])))))
     (cond [(not (= n 0)) ; we got stuck, try again
-           ;(log-error "generate-dungeon: had to restart")
+           (log-error "generate-dungeon: had to restart")
            ;; may have gotten too ambitious with n of rooms, back off
            (set! n-rooms (max (length encounters) (sub1 n-rooms)))
            (loop)]
