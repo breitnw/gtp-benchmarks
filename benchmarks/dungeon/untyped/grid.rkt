@@ -1,5 +1,7 @@
 #lang racket
 
+(define-syntax ctc-level 'trace)
+
 (require
   "../base/un-types.rkt"
   require-typed-check
@@ -17,8 +19,6 @@
   cell%?
 ))
 (require/configurable-contract "cell.rkt" void-cell% char->cell% empty-cell% cell% wall% door%)
-
-(define-syntax ctc-level 'trace)
 
 (provide/configurable-contract
  [array-set! ([trace array-set!-c/trace-ctc]
@@ -153,7 +153,8 @@
 (define (allowed-transition? from% to%)
   (define allowed-transitions
     `((,void-cell% . ,cell%) ;; void cell can become any other cell type
-      (,wall% . ,door%)))    ;; walls can only be converted into doors
+      (,wall% . ,door%)      ;; walls can only be converted into doors
+      (,wall% . ,wall%)))    ;; ...or into other walls
   (for/or ([transition allowed-transitions])
     (match-define (cons super-from% super-to%) transition)
     (and (subclass? from% super-from%)
@@ -165,13 +166,25 @@
             [v cell%?])
            (g p v . -> . void?)
            (accumulate (hash)
-                       [(g p v)
-                        (λ (tr grid posn cell)
-                          (define-values (cell-class _) (object-info cell))
-                          (if (and (hash-has-key? tr posn)
-                                   (not (allowed-transition? (hash-ref tr posn) cell-class)))
-                              (fail)
-                              (hash-set tr posn cell-class)))])))
+            [(g p v)
+            (λ (tr grid posn cell #:blame b)
+              (define current-cell%
+                (or (and (hash-has-key? tr grid)
+                         (hash-ref (hash-ref tr grid) posn #f))
+                    void-cell%))
+              (define-values (new-cell% _) (object-info cell))
+              (if (allowed-transition? current-cell% new-cell%)
+                  (let [(posn-map (hash-ref tr grid (hash)))]
+                    (hash-set tr grid (hash-set posn-map posn new-cell%)))
+                  (fail #:explain
+                        (λ () (raise-blame-error
+                               b
+                               array-set!
+                               (format
+                                "Tried to transition cell ~a from ~a to ~a, but this is not allowed"
+                                posn
+                                current-cell%
+                                new-cell%))))))])))
 
 ;; parses a list of strings into a grid, based on the printed representation
 ;; of each cell

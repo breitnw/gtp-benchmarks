@@ -56,10 +56,14 @@
 
 ;; =============================================================================
 
-(define rng (vector->pseudo-random-generator '#(42 10 23 89 67 91)))
+(define rng
+  (make-pseudo-random-generator)
+  #;(vector->pseudo-random-generator '#(41 20 21 45 27 91)))
 
 (define (reset!)
-  (set! rng (vector->pseudo-random-generator '#(01 54 23 89 67 10))))
+  (set! rng
+        (make-pseudo-random-generator)
+        #;(vector->pseudo-random-generator '#(41 20 21 45 27 91))))
 
 ;; Non-specific ctc because this random stuff is rigged to be deterministic
 (define (random-upto n)
