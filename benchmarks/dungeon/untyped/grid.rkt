@@ -152,14 +152,16 @@
 
 (define (allowed-transition? from% to%)
   (define allowed-transitions
-    `((,void-cell% . ,cell%) ;; void cell can become any other cell type
-      (,wall% . ,door%)      ;; walls can only be converted into doors
-      (,wall% . ,wall%)))    ;; ...or into other walls
+    `((,void-cell% . ,wall%)
+      (,void-cell% . ,empty-cell%)
+      (,wall% . ,door%)
+      (,wall% . ,wall%)))
   (for/or ([transition allowed-transitions])
     (match-define (cons super-from% super-to%) transition)
     (and (subclass? from% super-from%)
          (subclass? to% super-to%))))
 
+;; TODO try chaperone-vector
 (define/ctc-helper array-set!-c/trace-ctc
   (trace/c ([g grid?]
             [p array-coord?]
