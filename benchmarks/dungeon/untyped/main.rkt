@@ -668,8 +668,6 @@
 
 
 
-
-
 (module+ test
   (require typed/rackunit)
 
@@ -715,35 +713,8 @@
                                "......")))
 
 
-  (define (empty-grid1)
-    (build-array #(20 40) (lambda _ (new void-cell%))))
-  (define g11 (empty-grid1))
-  (check-equal? (show-grid g11)
-                (render-grid '("........................................"
-                               "........................................"
-                               "........................................"
-                               "........................................"
-                               "........................................"
-                               "........................................"
-                               "........................................"
-                               "........................................"
-                               "........................................"
-                               "........................................"
-                               "........................................"
-                               "........................................"
-                               "........................................"
-                               "........................................"
-                               "........................................"
-                               "........................................"
-                               "........................................"
-                               "........................................"
-                               "........................................"
-                               "........................................")))
-
   ;; ============================================================================================
   ;; room counter function
-
-
   (define (room-counter grid)
       
       (define num-corr (corridor-counter grid))
@@ -753,32 +724,17 @@
           (- (+ 1 num-door) num-corr)
           )
       )
-  
-
-  
   ;; ============================================================================================
   ;; corridor counter function
 
   
   (define (corridor_helper grid-split index-lst curr-index counted num-pairs)
     (define num_pairs (- (length index-lst) 1))
-    ;(printf "in the corridor helper\n")
-    ;(printf "num_pairs: ~a\n" num_pairs)
     (cond [(< num_pairs 1)
-           ;(printf "Done iterating. Returning counted as the following: ~a\n" counted)
            counted]
           [else
-           ;(define indecies (take (drop index-lst index) 2) ) ;; get a pair indicies
            (define front (list-ref index-lst 0))
            (define back (list-ref index-lst 1))
-           ;(printf "front: ~a\n" front)
-           ;(printf "back: ~a\n" back)
-           (define prev-line (vector-ref grid-split (- curr-index 1))) ;; get the previous line
-           ;(define prev-line-lst (string->list prev-line)) ;; get the string as a list
-           (define sectioned-prev-lst (vector-copy prev-line front (+ back 1)))
-           (define next-line (vector-ref grid-split (+ curr-index 1))) ;; get the next line
-           ;(define next-line-lst (string->list next-line)) ;; get the string as a list
-           (define sectioned-next-lst (vector-copy next-line front (+ back 1)))
            (cond
              [(>= (- back front) 3) ;; need to determine how long a corridor is supposed to be
               (corridor_helper grid-split (rest index-lst) curr-index counted (- num-pairs 1))]
@@ -796,12 +752,8 @@
 
                (equal? (vector-ref (vector-ref grid-split (- curr-index 1)) (+ front 2)) (new wall%))
                (equal? (vector-ref (vector-ref grid-split (+ curr-index 1)) (+ front 2)) (new wall%))
-                ;;index 0, walls
-               
-               )
-              ;(printf "Found a corridor!\n")     
+               )     
               (set! counted (+ counted 1))
-              ;(printf "updated counted: ~a\n" counted)
               (corridor_helper grid-split (rest index-lst) curr-index counted (- num-pairs 1))]
              [else (corridor_helper grid-split (rest index-lst) curr-index counted (- num-pairs 1))
                    ]
@@ -822,23 +774,15 @@
       (for ([i line]) ;; loop through line, collect indexs of all possible corridor locations
         ;(printf "i: ~a\n" i)
         (cond [(equal? i (new vertical-door%))
-               ;(printf "found a vertical door\n")
                (set! index-lst (cons index2 index-lst))
-               ;(printf "current: index-lst: ~a\n" index-lst)
                ]
               [(equal? i (new horizontal-door%))
-               ;(printf "found a horizontal door\n")
                (set! vert-lst (cons (list index1 index2) vert-lst))
-               ;(printf "current: vert-lst: ~a\n" vert-lst)
                ]
               )
         (set! index2 (+ index2 1)))
       (set! index-lst (reverse index-lst))
-      
-      (cond [(or (equal? 1 (length index-lst)) (equal? 0 (length index-lst)))
-             ;(printf "we only have one or zero doors\n ")
-             void] ;; if there is just one or zero record position, then it is a door, ignore
-            [else
+      (cond [(< 1 (length index-lst))
              ;(printf "we have more than one door that is vertical")
              (define num_pairs (- (length index-lst) 1)) ;; otherwise, call helper function to match pair and determin if a corridor exists
              ;(printf "number of pairs: ~a\n" num_pairs)
@@ -847,22 +791,13 @@
              (set! count (+ count new_found_corr))
              ]
             )
-        
       (set! curr-index (+ curr-index 1))
       (set! index1 (+ 1 index1)))
     (set! vert-lst (reverse vert-lst))
-    ;; now take the horizontal doors, and determine if they are composing any vertical corridors
-    ;(printf "into vertical corridor territory\n")
-    ;(printf "current count: ~a\n" count)
-    (define vert-index 1)
-    ;(printf "vert-lst: ~a\n" vert-lst)
     (for ([loc vert-lst])
-      ;(printf "curr first comparision point: ~a\n" loc)
       (define x1 (first loc))
       (define y1 (last loc))
       (define other_pairs (rest vert-lst))
-      ;(printf "other_pairs: ~a\n" other_pairs)
-      (set! vert-index (+ 1 vert-index))
       (for ([i other_pairs])
         (unless (equal? i loc)
           ;(printf "curr second comparision point: ~a\n" i)
@@ -875,12 +810,6 @@
           ;(printf "y2: ~a\n" y2)
           (cond
             [(and (equal? y1 y2) (< dist 3) (not (<= dist 0))) ;; possible vertical corridor match!
-             ;(printf "we have possible vertical match!\n")
-              ;; the horizontal lines
-             ;; y1 and y2 are the vertical locations
-             ;; test to make sure the distance between these two is doors is 3 
-             ;(check-equal? #t (< dist 3))
-             ;(printf "dist between doors: ~a\n" dist)
              (define indicator #t)
              (cond [(not
                      (and
@@ -907,67 +836,36 @@
                       ))
                     (set! indicator #f)])
              (cond [(equal? indicator #t)
-                    ;(printf "indicator is true, successful find!\n")
-                    (set! count (+ count 1))
-                    #;(printf "updated count: ~a\n" count)])]))))
-    count
-    )
-  
+                    (set! count (+ count 1))])]))))
+    count)
   ;; ============================================================================================
   ;; door counter function
-
   (define (door-counter grid)
-    ;(define grid-split (string-split grid "\n"))
-    ;(printf "grid: ~a\n" grid)
     (define count 0)
     (for ([line grid])
-      ;; fix line
       (for ([i line])
-        ;(printf "object: ~a\n" i)
         (cond [(or (equal? i (new horizontal-door%))
                    (equal? i (new vertical-door%)))
-               ;(printf "found a door!!!!!!!!!!!!!!!!!!!!!!!!!\n")
                (set! count (+ count 1))
-               ])
-        )
-      )
+               ])))
     count
     )
-
   ;; ============================================================================================  
   ;; helper function to gather the borders different rooms/corridors put into the grid
   (define (dimensions-calc rooms)
-    ;(printf  "rooms: ~a\n" (room-poss->cells rooms))
     (define beginning (first (room-poss->cells rooms)))
     (match-define (cons pos1 cell1%) beginning)
     (define end (last (room-poss->cells rooms)))
     (match-define (cons pos2 cell2%) end)
     (set! room_boundaries (cons (list pos1 pos2) room_boundaries))
-    ;(printf "room_boundaries: ~a\n" room_boundaries)
-    
     )
   ;; ============================================================================================  
-  ;; testing function meant to test that cell objects are correctly overwritting specific cells 
+  ;; grid-replace-checks: takes a replacement cell, and tests whether if can be place over the existing cell
   (define (grid-replace-checks grid pos cell)
-    ;(printf "in grid replacement\n")
     (define curr-cell (grid-ref grid pos))
-    ;(printf "pos: ~a\n" pos)
-    ;(printf "curr-cell: ~a\n" curr-cell)
     (define x (vector-ref pos 0))
-    ;(printf "x: ~a\n" x)
     (define y (vector-ref pos 1))
-    ;(printf "y: ~a\n" y)
-    ;; vertical
-    ;; (+ y 1)
-    ;; (- y 1)
-    ;; keep x 
-
-    ;; horizontal
-    ;; (+ x 1)
-    ;; (- x 1)
-    ;; keep y
     (cond
-      
       [(equal? cell (new empty-cell%))
        (check-equal? curr-cell (new void-cell%))]
       [(equal? cell (new wall%))
@@ -976,7 +874,6 @@
                       (equal? curr-cell (new wall%))
                       (equal? curr-cell (new void-cell%))))] 
       [(equal? cell (new vertical-door%))
-       ;; adding walls above or on the sides, based on the type of doors
        (check-equal? #t
                      (and
                       (and
@@ -986,7 +883,6 @@
                        (check-equal? (grid-ref grid (vector x (- y 1))) (new empty-cell%)))
                       (equal? curr-cell (new wall%))))] 
       [(equal? cell (new horizontal-door%))
-       ;(printf "found a horizontal door!\n")
        (check-equal? #t
                      (and
                       (and
@@ -994,24 +890,15 @@
                        (check-equal? (grid-ref grid (vector x (- y 1))) (new wall%))
                        (check-equal? (grid-ref grid (vector (+ x 1) y)) (new empty-cell%)) 
                        (check-equal? (grid-ref grid (vector (- x 1) y)) (new empty-cell%)))
-                      (equal? curr-cell (new wall%))))] 
-      )
-    )
-
+                      (equal? curr-cell (new wall%))))]))
   ;; ============================================================================================  
-
-
   (define (commit-room1 grid room)
     (dimensions-calc room)
-    ;(printf "room: ~a\n" (room-poss->cells room))
     (for ([pos+cell% (in-list (room-poss->cells room))])
       (match-define (cons pos cell%) pos+cell%)
       (grid-replace-checks grid pos cell%)
       (array-set! grid pos (new cell%))
-      ;(printf "pos: ~a\n" pos)
-      ;(set! room_boundaries (cons room_boundaries pos))
       ))
-
   ;; ============================================================================================  
   ;; modified version of generate-dungeon
   ;; -- includes tracker variables such as room_boundaries, corridor, count, etc in order to track specific components, and ensure they operate together correctly
@@ -1032,7 +919,6 @@
     (define grid
       (build-array (vector dungeon-height dungeon-width)
                    (lambda _ (new void-cell%)))) ;; new cell created 
-  
     (define first-room
       (let loop  ()
         (define starting-point
@@ -1054,7 +940,6 @@
   (define (extension-points/room-loc room)
     (for/list  ([e (in-list (room-extension-points room))])
       (cons e room)))
-
   ;; ============================================================================================  
   (define (add-room-loc grid dir n-rooms-to-go rooms extension-points origin-room room ext [corridor #f] [new-ext #f])
     
@@ -1106,7 +991,6 @@
                         '())
                     (extension-points/room-loc room)
                     extension-points)))
-
   ;; ============================================================================================  
   (define (adding-doors-loc grid all-rooms)
     (define potential-connections
@@ -1144,8 +1028,6 @@
                  (array-set! grid pos (new door-kind))
                  (set! door-count (+ 1 door-count))
                  (check-equal? door-count (door-counter grid))))
-
-
     )
   ;; ============================================================================================  
   (define (adding-loop grid n-rooms first-room encounters)
@@ -1162,7 +1044,6 @@
             ((= n-rooms-to-go 0) ;; no rooms left to add
              (values n-rooms-to-go rooms extension-points))
             (else ;; else
-        
              ;; pick an extension point at random
              (match-define `(,ext . ,origin-room) (random-from extension-points))
              ;; first, try branching a corridor at random
@@ -1191,7 +1072,6 @@
                    [else ; didn't fit, try again
                     (values n-rooms-to-go rooms extension-points) 
                     ])
-             
              ))))
       (cond [(not (= n 0)) ; we got stuck, try again
              ;(log-error "generate-dungeon: had to restart")
@@ -1289,25 +1169,8 @@
                  [else
                   (is-between? (rest pos-lst) indicator)])])
     indicator)
-  
-
-  ;; ============================================================================================  
-  ;; door -- corridor -- room calculation test demostration
-  
-  ;; door counting
-  ;; basic testing, one test with correct input, one with missing a door, one an extra
-  
-  
-  
-  ;(display (show-grid tst-grid1)) 
-  
-  ;; corridor counting ;; review
-
-  ;; room -- room counting algorithm
-  ;; example of correct outputs
-  ;; example of incorrect output, say wrong extra doors
-  ;(display (show-grid  (generate-dungeon (range N))))
-  ;; randomized testing; simulation created a different set of rooms each time
+  ;; ============================================================================================
+  ;; random testing
   (define gridout (generate-dungeon-loc (range N)))
   ;(printf "grid: ~a\n" gridout)
   (display (show-grid gridout))
@@ -1319,7 +1182,9 @@
   (check-equal? (room-counter gridout) room-count)
   (check-equal? (is-between? room_boundaries #t) #t)
 
-
+  ;; ============================================================================================  
+  ;; door -- corridor -- room calculation test demostration
+  
   #;(define grid (vector
      ;; Row 0
      (vector (new void-cell%) (new void-cell%) (new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)
@@ -1395,9 +1260,90 @@
       )
      )
     )
-
-
-
+  ;;(display (show-grid grid))
+  ;;(check-equal 2 (door-counter grid))
+  ;;(check-equal 1 (corridor-counter grid))
+  ;;(check-equal 2 (room-counter grid)) 
+  
+  #;(define grid (vector
+     ;; Row 0
+     (vector (new void-cell%) (new void-cell%) (new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)
+             (new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%))
+      ;; Row 1
+     (vector (new void-cell%)(new void-cell%)(new void-cell%)(new wall%)(new wall%)(new wall%)(new wall%)(new wall%)(new wall%)(new wall%)(new wall%)(new wall%)(new void-cell%)
+             (new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%))
+     ;; Row 2
+     (vector (new void-cell%)(new void-cell%)(new void-cell%)(new wall%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new wall%)(new void-cell%)
+             (new wall%)(new wall%)(new wall%)(new wall%)(new wall%)(new wall%)(new wall%)(new wall%)(new wall%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%))
+     ;; Row 3
+     (vector (new void-cell%)(new void-cell%)(new void-cell%)(new wall%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new wall%)(new wall%)
+             (new wall%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new wall%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%))
+     ;; Row 4
+     (vector (new void-cell%)(new void-cell%)(new void-cell%)(new wall%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new wall%)(new empty-cell%)
+             (new wall%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new wall%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%))
+     ;; Row 5
+     (vector (new void-cell%)(new void-cell%)(new void-cell%)(new wall%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new wall%)(new empty-cell%)
+             (new wall%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new wall%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%))
+     ;; Row 6
+     (vector (new void-cell%)(new void-cell%)(new void-cell%)(new wall%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new wall%)(new empty-cell%)
+             (new wall%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new wall%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%))
+     ;; Row 7
+     (vector (new void-cell%)(new void-cell%)(new void-cell%)(new wall%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new vertical-door%)(new empty-cell%)
+             (new vertical-door%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new wall%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%))
+     ;; Row 8
+     (vector (new void-cell%)(new void-cell%)(new void-cell%)(new wall%)(new wall%)(new wall%)(new wall%)(new wall%)(new wall%)(new wall%)(new wall%)(new wall%)(new empty-cell%)
+             (new wall%)(new wall%)(new wall%)(new wall%)(new wall%)(new wall%)(new wall%)(new wall%)(new wall%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%))
+     ;; Row 9
+     (vector 
+      (new void-cell%) (new void-cell%)(new void-cell%) (new void-cell%) (new wall%) (new empty-cell%) (new empty-cell%) (new empty-cell%) 
+      (new wall%) (new void-cell%) (new void-cell%) (new wall%) (new empty-cell%) (new wall%) (new void-cell%) 
+      (new void-cell%) (new void-cell%) (new void-cell%) (new void-cell%) (new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%) (new void-cell%) (new void-cell%))
+     ;; Row 10
+     (vector 
+      (new wall%) (new wall%) (new wall%) (new wall%) (new wall%) (new wall%) (new wall%) (new wall%) 
+      (new wall%) (new void-cell%) (new void-cell%) (new wall%) (new wall%) (new wall%) (new  void-cell%) (new  void-cell%) 
+      (new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%))
+     ;; Row 11
+     (vector
+      (new wall%) (new empty-cell%) (new empty-cell%) (new empty-cell%) (new empty-cell%) (new empty-cell%) (new empty-cell%)
+      (new empty-cell%) (new wall%) (new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%))
+     ;; Row 12
+     (vector
+      (new wall%) (new empty-cell%) (new empty-cell%) (new empty-cell%)
+      (new empty-cell%) (new empty-cell%) (new empty-cell%) (new empty-cell%) (new wall%) (new  void-cell%) (new  void-cell%) (new  void-cell%)
+      (new  void-cell%) (new  void-cell%) (new  void-cell%)(new  void-cell%)  (new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%))
+     ;; Row 13
+     (vector
+      (new wall%) (new empty-cell%) (new empty-cell%) (new empty-cell%)
+      (new empty-cell%) (new empty-cell%) (new empty-cell%) (new empty-cell%) (new wall%) (new  void-cell%) (new  void-cell%) (new  void-cell%)
+      (new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%)(new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%))
+     ;; Row 14
+     (vector
+      (new wall%) (new empty-cell%) (new empty-cell%) (new empty-cell%)
+      (new empty-cell%) (new empty-cell%) (new empty-cell%) (new empty-cell%) (new wall%) (new  void-cell%) (new  void-cell%) (new  void-cell%)
+      (new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%)(new  void-cell%)(new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%))
+     ;; Row 15
+     (vector
+      (new wall%) (new empty-cell%) (new empty-cell%) (new empty-cell%)
+      (new empty-cell%) (new empty-cell%) (new empty-cell%) (new empty-cell%)(new wall%) (new  void-cell%) (new  void-cell%) (new  void-cell%)
+      (new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%)(new  void-cell%)(new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%))
+     ;; Row 16
+     (vector
+      (new wall%) (new empty-cell%) (new empty-cell%) (new empty-cell%)
+      (new empty-cell%) (new empty-cell%) (new empty-cell%) (new empty-cell%) (new wall%) (new  void-cell%) (new  void-cell%) (new  void-cell%)
+      (new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%)(new  void-cell%)(new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%))
+     ;; Row 17
+     (vector
+      (new wall%) (new wall%) (new wall%) (new wall%) 
+      (new wall%) (new wall%) (new wall%) (new wall%) (new wall%) (new  void-cell%) (new  void-cell%) (new  void-cell%)
+      (new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%)(new  void-cell%)(new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%)
+      )
+     )
+    )
+  ;;(display (show-grid grid))
+  ;;(check-equal 2 (door-counter grid))
+  ;;(check-equal 1 (corridor-counter grid))
+  ;;(check-equal 2 (room-counter grid))
   ;; ============================================================================================
   ;; grid-replace-checks/object-replacement test demostration -- expand on, if it has doors, the door sides need to be empty cells
   ;; basic passing tests
@@ -1418,13 +1364,9 @@
              (grid-replace-checks grid-ex1 (vector (+ i 2) (+ j 2)) (new empty-cell%))
              (array-set! grid-ex1 (vector (+ i 2) (+ j 2)) (new empty-cell%))
              ])
-
-
       )
     )
-  
   ;(display (show-grid grid-ex1))
-
   (for ([i (in-range 7)])
     (for ([j (in-range 7)])
       (cond [(or (equal? i 0) (equal? i 6))
@@ -1481,22 +1423,6 @@
              ])
       )
     )
-
-
-  ;; replacing objects that are not supposed to be replaced (do through function calls)
-
-
-
-  ;; application of intersecting rooms, i.e empty-cells being overwritten
-  ;; empty cell on both sides of doors 
-  
-  ;;
-
-
-  
-
-  
-  
   ;; ============================================================================================  
   ;; is-between/intersecting or overlapping room test demostration
   
