@@ -64,7 +64,7 @@
 ;; Non-specific ctc because this random stuff is rigged to be deterministic
 (define (random-upto n)
   #;(displayln (format "(random-upto ~a)" n))
-  (random n rng))
+  (random n))
 
 (define/ctc-helper (list+titlecases . los)
   (append los
@@ -86,7 +86,7 @@
 
 (define (random-between min max) ;; TODO replace with 6.4's `random`
   #;(displayln (format "(random ~a ~a)" min max))
-  (random min max rng))
+  (random min max))
 
 (define (d6)
   (random-between 1 7))
@@ -95,4 +95,4 @@
   (random-between 1 21))
 
 (define (random-from l)
-  (list-ref l (random (length l) rng)))
+  (list-ref l (random (length l))))
