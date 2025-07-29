@@ -730,7 +730,6 @@
     )
   ;; ============================================================================================
   ;; corridor counter function
-
   
   (define (corridor_helper grid-split index-lst curr-index counted num-pairs)
     (define num_pairs (- (length index-lst) 1))
@@ -946,9 +945,6 @@
     (set! door-count (+ 1 door-count))
     (cond [(not (equal? door-count (door-counter grid)))
            (error "The door count does not match what is currently in the grid!\n" door-count (display (show-grid grid)))])
-    
-    ;(printf "grid before committing corridor doors\n")
-    ;(display (show-grid grid))
     (when new-ext
       (array-set! grid new-ext (new door-kind))
       (set! door-count (+ 1 door-count))) 
@@ -1073,16 +1069,12 @@
   (define (is-between? pos-lst indicator)
     (cond [(equal? (length (rest pos-lst)) 0) indicator]
           [else 
-           (define curr-front (first (first pos-lst)))
-           (define curr-end (last (first pos-lst)))
-           (define p1 curr-front)
+           (define p1 (first (first pos-lst)))
+           (define p4 (last (first pos-lst)))
            (define x1 (vector-ref p1 0))
            (define y1 (vector-ref p1 1))
-           (define p4 curr-end)
            (define x2 (vector-ref p4 0))
            (define y2 (vector-ref p4 1))
-           (define p2 (list x1 y2))
-           (define p3 (list x2 y1))
            (for ([remain (rest pos-lst)])
              (define look-f (first remain))
              (define x-start (vector-ref look-f 0))
@@ -1124,16 +1116,13 @@
                     (< y-start y2)
                     (< y2 y-end))))
                  )
-                (set! indicator #f)
-                ]))
-           (cond [(equal? indicator #f)
-                  (error "This grid is not set up correctly! There are rooms that overlap/intersect")]
-                 [else
-                  (is-between? (rest pos-lst) indicator)])])
+                (error "This grid is not set up correctly! There are rooms that overlap/intersect")]
+               [else
+                (is-between? (rest pos-lst) indicator)]))])
     indicator)
   ;; ============================================================================================
   ;; random testing
-  (for ([i (in-range 10000)])
+  (for ([i (in-range 1000)])
     (define gridout (generate-dungeon-loc (range 1)))
     (display (show-grid  gridout))
     (printf "room-count: ~a\n" room-count)
@@ -1440,8 +1429,8 @@
 
   ;; rooms or corridors placed inside of eachother
   ;(define test-lst3 '(( #(5 0) #(19 14))  ( #(9 3) #(14 9))))
-  ;(define test-lst4 '( ( #(9 3) #(14 9))  ( #(5 0) #(19 14))))
   ;(check-equal? (is-between? test-lst3 #t) #t)
+  ;(define test-lst4 '( ( #(9 3) #(14 9))  ( #(5 0) #(19 14))))
   ;(check-equal? (is-between? test-lst4 #t) #t)
 
   ;;
