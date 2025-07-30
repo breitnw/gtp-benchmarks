@@ -334,7 +334,10 @@
 (define (commit-room grid room)
   (for ([pos+cell% (in-list (room-poss->cells room))])
     (match-define (cons pos cell%) pos+cell%)
-    (array-set! grid pos (new cell%))))
+    (displayln (format "(main, before array-set!) ~a" (chaperone? grid)))
+    (array-set! grid pos (new cell%))
+    (displayln (format "(main, after array-set!) ~a" (chaperone? grid)))
+    ))
 
 
 (define (random-direction)
@@ -404,6 +407,7 @@
   (define grid
      (build-array (vector dungeon-height dungeon-width)
                   (lambda _ (new void-cell%))))
+  (displayln (format "(main, after build-array) ~a" (chaperone? grid)))
   (define first-room
     (let loop  ()
       (define starting-point
@@ -412,7 +416,9 @@
       (define first-room
         (new-room grid starting-point (random-direction)))
       (or first-room (loop)))) ; if it doesn't fit, try again
+  (displayln (format "(main, before commit-room) ~a" (chaperone? grid)))
   (commit-room grid first-room)
+  (displayln (format "(main, after commit-room) ~a" (chaperone? grid)))
   (when animate-generation? (display (show-grid grid)))
   (define connections '()) ; keep track of pairs of connected rooms
   (define (extension-points/room room)

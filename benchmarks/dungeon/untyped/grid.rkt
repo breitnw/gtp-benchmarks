@@ -28,7 +28,13 @@
                         [result void?]
                         #:post (g p v) (equal? v (grid-ref g p)))]
               [types ((arrayof cell%?) array-coord? cell%? . -> . void?)])]
- [build-array ([max (->i ([p array-coord?]
+ [build-array ([trace (-> any/c any/c (make-chaperone-contract
+                                       #:name 'grid-chaperone/c
+                                       #:projection
+                                       (λ (_b)
+                                         (λ (vec)
+                                           (chaperone-vector vec #f #f)))))]
+               [max (->i ([p array-coord?]
                           [f (array-coord? . -> . cell%?)])
                          [result (p)
                                  (and/c (arrayof cell%?)
@@ -131,7 +137,10 @@
   (vectorof (vectorof val-ctc)))
 
 (define (array-set! g p v)
-  (vector-set! (vector-ref g (vector-ref p 0)) (vector-ref p 1) v))
+  (displayln (format "(grid, before vector-set!) ~a" (chaperone? g)))
+  (vector-set! (vector-ref g (vector-ref p 0)) (vector-ref p 1) v)
+  (displayln (format "(grid, after vector-set!) ~a" (chaperone? g)))
+  )
 
 (define/ctc-helper ((array-size=/c dims) array)
   (match-define (vector x y) dims)
@@ -160,14 +169,20 @@
     (and (subclass? from% super-from%)
          (subclass? to% super-to%))))
 
+#;(define/ctc-helper (my-grid? gr)
+  #;(displayln (format "(in collector) chaperone? ~a" (chaperone? gr)))
+  (grid? gr))
+(define my-grid? (λ (gr) (grid? gr)))
+
 (define/ctc-helper array-set!-c/trace-ctc
-  (trace/c ([g grid?]
+  (trace/c ([g my-grid?]
             [p array-coord?]
             [v cell%?])
            (g p v . -> . void?)
            (accumulate (hash)
             [(g p v)
             (λ (tr grid posn cell #:blame b)
+              (displayln (format "(in trace ctc) chaperone? ~a" (chaperone? grid)))
               (define current-cell%
                 (or (and (hash-has-key? tr grid)
                          (hash-ref (hash-ref tr grid) posn #f))
