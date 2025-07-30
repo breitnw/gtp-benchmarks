@@ -307,7 +307,8 @@
 
         (cond [(and c ; not out of bounds
                     (or (is-a? c void-cell%) ; unused yet
-                        (is-a? c wall%)))    ; neighboring room, can abut
+                        (is-a? c wall%)      ; neighboring room, can abut
+                        #;(is-a? c empty-cell%)))
                (define p (vector (assert x index?) (assert y index?)))
                ;; tentatively add stuff
                (define x-wall? (or (= x min-x) (= x (sub1 max-x))))
@@ -627,14 +628,14 @@
         [(_ _ _ _) (raise-user-error 'voidcase)])))))
 
 
-(define LOOPS 1)
+(define LOOPS 3)
 
-#;(define (main)
+(define (main)
   (for ((_i (in-range LOOPS)))
     (show-grid (smooth-walls (generate-dungeon (range N))))
     (reset!)))
 
-(define (main)
+#;(define (main)
   (show-grid (generate-dungeon (range N))))
 
 (time (display (main)))

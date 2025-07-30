@@ -153,7 +153,6 @@
   (for/vector ([x (in-range (vector-ref p 0))])
     (for/vector ([y (in-range (vector-ref p 1))])
       (f (vector (assert x index?) (assert y index?))))))
-  ;(build-array p f)))
 
 ;; a Grid is a math/array Mutable-Array of cell%
 ;; (mutability is required for dungeon generation)
