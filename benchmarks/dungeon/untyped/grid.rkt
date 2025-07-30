@@ -140,11 +140,20 @@
            (= (vector-length (vector-ref array 0)) y)
            #t)))
 
+(define-values (grid-prop grid-prop? grid-prop-get)
+  (make-impersonator-property 'grid-prop))
+
+(define grid-idx 0)
+
 (define (build-array p f)
-  (for/vector ([x (in-range (vector-ref p 0))])
-    (for/vector ([y (in-range (vector-ref p 1))])
-      (f (vector (assert x index?) (assert y index?))))))
-  ;(build-array p f)))
+  (chaperone-vector
+   (for/vector ([x (in-range (vector-ref p 0))])
+     (for/vector ([y (in-range (vector-ref p 1))])
+       (f (vector (assert x index?) (assert y index?)))))
+   #f #f
+   grid-prop
+   (begin0 grid-idx
+           (set! grid-idx (add1 grid-idx)))))
 
 ;; a Grid is a math/array Mutable-Array of cell%
 ;; (mutability is required for dungeon generation)
@@ -161,21 +170,23 @@
          (subclass? to% super-to%))))
 
 (define/ctc-helper array-set!-c/trace-ctc
-  (trace/c ([g grid?]
+  (trace/c ([g (and/c grid? grid-prop?)]
             [p array-coord?]
             [v cell%?])
            (g p v . -> . void?)
            (accumulate (hash)
             [(g p v)
             (λ (tr grid posn cell #:blame b)
+              (define idx (grid-prop-get grid))
+              (displayln idx)
               (define current-cell%
-                (or (and (hash-has-key? tr grid)
-                         (hash-ref (hash-ref tr grid) posn #f))
+                (or (and (hash-has-key? tr idx)
+                         (hash-ref (hash-ref tr idx) posn #f))
                     void-cell%))
               (define-values (new-cell% _) (object-info cell))
               (if (allowed-transition? current-cell% new-cell%)
-                  (let [(posn-map (hash-ref tr grid (hash)))]
-                    (hash-set tr grid (hash-set posn-map posn new-cell%)))
+                  (let [(posn-map (hash-ref tr idx (hash)))]
+                    (hash-set tr idx (hash-set posn-map posn new-cell%)))
                   (fail #:explain
                         (λ () (raise-blame-error
                                b
