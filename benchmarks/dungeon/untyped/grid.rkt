@@ -143,17 +143,17 @@
 (define-values (grid-prop grid-prop? grid-prop-get)
   (make-impersonator-property 'grid-prop))
 
-(define grid-idx 0)
-
-(define (build-array p f)
-  (chaperone-vector
-   (for/vector ([x (in-range (vector-ref p 0))])
-     (for/vector ([y (in-range (vector-ref p 1))])
-       (f (vector (assert x index?) (assert y index?)))))
-   #f #f
-   grid-prop
-   (begin0 grid-idx
-           (set! grid-idx (add1 grid-idx)))))
+(define build-array
+  (let ([grid-idx (box 0)])
+    (λ (p f)
+      (chaperone-vector
+       (for/vector ([x (in-range (vector-ref p 0))])
+         (for/vector ([y (in-range (vector-ref p 1))])
+           (f (vector (assert x index?) (assert y index?)))))
+       #f #f
+       grid-prop
+       (begin0 (unbox grid-idx)
+               (set-box! grid-idx (add1 (unbox grid-idx))))))))
 
 ;; a Grid is a math/array Mutable-Array of cell%
 ;; (mutability is required for dungeon generation)
