@@ -332,8 +332,10 @@
 
 ;; mutate `grid` to add `room`
 (define (commit-room grid room)
+  (dimensions-calc room)
   (for ([pos+cell% (in-list (room-poss->cells room))])
     (match-define (cons pos cell%) pos+cell%)
+    (grid-replace-checks grid pos cell%)
     (array-set! grid pos (new cell%))))
 
 
@@ -388,6 +390,204 @@
 (define/ctc-helper ((room-count>=/c n) grid)
   (>= (room-count grid) n))
 
+(define room_count (box 0))
+(define corridor_count (box 0))
+(define door_count (box 0))
+(define room-boundaries (box '()))
+
+;; ============================================================================================  
+(define (room-counter grid)
+  (for/fold ([count 0]) ([i (unbox room-boundaries)])
+    (match-define (vector x1 y1) (first i))
+    (match-define (vector x2 y2) (second i))
+    (cond [(<= 36 (* (- x2 x1) (- y2 y1))) (+ count 1)]
+          [else (+ count 0)])
+    )
+  )
+;; ============================================================================================  
+(define (corridor_helper grid-split index-lst curr-index counted num-pairs)
+    (define num_pairs (- (length index-lst) 1))
+    (cond [(< num_pairs 1)
+           counted]
+          [else
+           (define front (list-ref index-lst 0))
+           (define back (list-ref index-lst 1))
+           (cond
+             [(>= (- back front) 3) 
+              (corridor_helper grid-split (rest index-lst) curr-index counted (- num-pairs 1))]
+             [(and
+               (equal? (vector-ref (vector-ref grid-split (+ curr-index 1)) front) (new wall%))
+               (equal? (vector-ref (vector-ref grid-split (- curr-index 1)) front) (new wall%))
+               
+               (or (equal? (vector-ref (vector-ref grid-split (+ curr-index 1)) (+ front 1)) (new wall%))
+                   (equal? (vector-ref (vector-ref grid-split (+ curr-index 1)) (+ front 1)) (new empty-cell%))
+                   (equal? (vector-ref (vector-ref grid-split (+ curr-index 1)) (+ front 1)) (new horizontal-door%)))
+               
+               (or (equal? (vector-ref (vector-ref grid-split (- curr-index 1)) (+ front 1)) (new wall%))
+                   (equal? (vector-ref (vector-ref grid-split (- curr-index 1)) (+ front 1)) (new empty-cell%))
+                   (equal? (vector-ref (vector-ref grid-split (- curr-index 1)) (+ front 1)) (new horizontal-door%)))
+
+               (equal? (vector-ref (vector-ref grid-split (- curr-index 1)) (+ front 2)) (new wall%))
+               (equal? (vector-ref (vector-ref grid-split (+ curr-index 1)) (+ front 2)) (new wall%))
+               )     
+              (set! counted (+ counted 1))
+              (corridor_helper grid-split (rest index-lst) curr-index counted (- num-pairs 1))]
+             [else (corridor_helper grid-split (rest index-lst) curr-index counted (- num-pairs 1))
+                   ]
+             )]))
+(define (corridor-counter grid)
+  (define curr-index 0)
+  (define count 0)
+  (define index1 0) 
+  (define vert-lst '())
+  (for ([line grid])
+    (define index-lst '())
+    (define index2 0) 
+    (for ([i line]) 
+      (cond [(equal? i (new vertical-door%))
+             (set! index-lst (cons index2 index-lst))]
+            [(equal? i (new horizontal-door%))
+             (set! vert-lst (cons (list index1 index2) vert-lst))])
+      (set! index2 (+ index2 1)))
+    (set! index-lst (reverse index-lst))
+    (cond [(< 1 (length index-lst)) 
+           (set! count (+ count (corridor_helper grid index-lst curr-index 0 (- (length index-lst) 1))))])
+    (set! curr-index (+ curr-index 1))
+    (set! index1 (+ 1 index1)))
+  (set! vert-lst (reverse vert-lst))
+  (for ([loc vert-lst])
+    (match-define (list x1 y1) loc)
+    (for ([i (rest vert-lst)])
+      (unless (equal? i loc)
+        (match-define (list x2 y2) i)
+        (cond
+          [(and
+            (and (equal? y1 y2) (< (- x2 x1) 3) (not (<= (- x2 x1) 0)))
+            (and
+             (equal? (vector-ref (vector-ref grid (+ x1 0)) (- y1 1)) (new wall%))
+             (equal? (vector-ref (vector-ref grid (+ x1 0)) (+ y1 1)) (new wall%)))
+            (and
+             (and 
+              (or
+               (equal? (vector-ref (vector-ref grid (+ x1 1)) (- y1 1)) (new wall%))
+               (equal? (vector-ref (vector-ref grid (+ x1 1)) (- y1 1)) (new vertical-door%))
+               (equal? (vector-ref (vector-ref grid (+ x1 1)) (- y1 1)) (new empty-cell%)))
+              (or
+               (equal? (vector-ref (vector-ref grid (+ x1 1)) (+ y1 1)) (new wall%))
+               (equal? (vector-ref (vector-ref grid (+ x1 1)) (+ y1 1)) (new vertical-door%))
+               (equal? (vector-ref (vector-ref grid (+ x1 1)) (+ y1 1)) (new empty-cell%))))
+             (and
+              (equal? (vector-ref (vector-ref grid (+ x1 2)) (+ y1 1)) (new wall%))
+              (equal? (vector-ref (vector-ref grid (+ x1 2)) (- y1 1)) (new wall%)))))
+           (set! count (+ count 1))]))))
+  count)
+;; ============================================================================================  
+(define (door-counter grid)
+  (for/fold ([total 0]) ([line grid])
+    (+ total
+       (for/fold ([sub-total 0]) ([i line])
+         (cond [(or (equal? i (new horizontal-door%))
+                   (equal? i (new vertical-door%)))
+                (+ sub-total 1)]
+               [else
+                (+ 0 sub-total)])))))
+;; ============================================================================================  
+  ;; helper function to gather the borders different rooms/corridors put into the grid
+  (define (dimensions-calc rooms)
+    (match-define (cons pos1 cell1%) (first (room-poss->cells rooms)))
+    (match-define (cons pos2 cell2%) (last (room-poss->cells rooms)))
+    (set-box! room-boundaries (cons (list pos1 pos2) (unbox room-boundaries))))
+  ;; ============================================================================================  
+  ;; grid-replace-checks: takes a replacement cell, and tests whether if can be place over the existing cell
+(define (grid-replace-checks grid pos cell)
+  (define curr-cell (grid-ref grid pos))
+  (match-define (vector x y) pos)
+  (cond
+    [(equal? cell (new empty-cell%))
+     (when
+         (not
+          (equal? curr-cell (new void-cell%)))
+       (error "Not a valid placement for an empty-cell!\n")
+       ) ]
+    [(equal? cell (new wall%))
+     ;; every value is true except false, rack-unit, test suite, negative tests, expecting error from tests, tells you how many succeed and failed, test/error, groups of tests to run 
+     (when
+         (not
+          (or 
+           (equal? curr-cell (new wall%))
+           (equal? curr-cell (new void-cell%))))
+       (error "Not a valid placement for a wall!\n")
+       )] 
+    [(equal? cell (new vertical-door%))
+     (when
+         (not
+          (and
+           (equal? curr-cell (new wall%))
+           (equal? (grid-ref grid (vector (+ x 1) y)) (new wall%))
+           (equal? (grid-ref grid (vector (- x 1) y)) (new wall%))
+           (equal? (grid-ref grid (vector x (+ y 1))) (new empty-cell%)) 
+           (equal? (grid-ref grid (vector x (- y 1))) (new empty-cell%))))
+       (error "Not a valid placement for a vertical-door!\n"))] 
+    [(equal? cell (new horizontal-door%))
+     (when
+         (not
+          (and
+           (equal? curr-cell (new wall%))
+           (equal? (grid-ref grid (vector x (+ y 1))) (new wall%))
+           (equal? (grid-ref grid (vector x (- y 1))) (new wall%))
+           (equal? (grid-ref grid (vector (+ x 1) y)) (new empty-cell%)) 
+           (equal? (grid-ref grid (vector (- x 1) y)) (new empty-cell%))))
+       (error "not a valid placement for a horizontal door"))]))
+  ;; ============================================================================================  
+(define (is-between? pos-lst indicator)
+  (cond
+    [(empty? pos-lst) indicator]
+    [(empty? (rest pos-lst)) indicator]
+    [else 
+     (match-define (vector x1 y1) (first (first pos-lst)))
+     (match-define (vector x2 y2) (last (first pos-lst)))
+     (for ([remain (rest pos-lst)])
+       (match-define (vector x-start y-start) (first remain))
+       (match-define (vector x-end y-end) (last remain))
+       (cond
+         [(or
+           (and
+            (or
+             (and
+              (< x1 x-start)
+              (< x-start x2)) 
+             (and
+              (< x1 x-end)
+              (< x-end x2)))
+            (or
+             (and
+              (< y1 y-start)
+              (< y-start y2))
+             (and
+              (< y1 y-start)
+              (< y-end y2))
+             ))
+           (and
+            (or
+             (and
+              (< x-start x1)
+              (< x1 x-end))
+             (and
+              (< x-start x2)
+              (< x2 x-end)))
+            (or
+             (and
+              (< y-start y1)
+              (< y1 y-end))
+             (and
+              (< y-start y2)
+              (< y2 y-end))))
+           )
+          (error "This grid is not set up correctly! There are rooms that overlap/intersect")]
+         [else
+          (is-between? (rest pos-lst) indicator)]))])
+  indicator)
+;; ============================================================================================  
 ;; ll: temporal: this should display things IF `animate-generation?`
 (define (generate-dungeon encounters)
   ;; lltodo: This could be more specific: returned grid should contain
@@ -406,7 +606,11 @@
   ;(printf "encounters: ~a\n" encounters)
   ;(printf "length of encounters: ~a\n" (length encounters))
   (define n-rooms (max (length encounters) (random-between 6 9)))
-  ;(printf "N-rooms: ~a\n" n-rooms)
+  (set-box! corridor_count 0)
+  (set-box! door_count 0)
+  (set-box! room_count 0)
+  (set-box! room-boundaries '())
+  
   (define grid
     (build-array (vector dungeon-height dungeon-width)
                  (lambda _ (new void-cell%)))) ;; new cell created : call to void-cell%
@@ -420,6 +624,7 @@
         (new-room grid starting-point (random-direction)))
       (or first-room (loop)))) ; if it doesn't fit, try again
   (commit-room grid first-room)
+  (set-box! room_count (+ 1 (unbox room_count)))
   (when animate-generation? (display (show-grid grid)))
   (define connections '()) ; keep track of pairs of connected rooms
   (define (extension-points/room room)
@@ -436,57 +641,72 @@
        ([i (in-range ITERS)])
         ;(printf "rooms: ~a\n" rooms)
         (cond
-         ((= n-rooms-to-go 0)
-          (values n-rooms-to-go rooms extension-points))
-         (else
-        (define (add-room origin-room room ext [corridor #f] [new-ext #f])
-          (when corridor
-            (commit-room grid corridor))
-          (commit-room grid room)
-          
-          ;; add doors
-          (define door-kind
-            (if (horizontal? dir) vertical-door% horizontal-door%))
-          (array-set! grid ext     (new door-kind))
-          
-          (when new-ext
-            (array-set! grid new-ext (new door-kind)))
-          (set! connections (cons (cons origin-room room) connections))
-          (when animate-generation? (display (show-grid grid)))
-          (values (sub1 n-rooms-to-go)
-                  (cons room rooms) ; corridors don't count
-                  (append (if corridor
-                              (extension-points/room corridor)
-                              '())
-                          (extension-points/room room)
-                          extension-points)))
-        ;; pick an extension point at random
-        (match-define `(,ext . ,origin-room) (random-from extension-points))
-        ;; first, try branching a corridor at random
-        (define dir (random-direction))
-        (cond [(and (zero? (random-upto 4)) ; maybe add a room directly, no corridor
-                    (new-room grid ext dir)) =>
-               (lambda (room) (add-room origin-room room ext))]
-              [(new-corridor grid ext dir) =>
-               (lambda (corridor)
-                 ;; now try adding a room at the end
-                 ;; Note: we don't commit the corridor until we know the room
-                 ;;   fits. This means that `try-add-rectangle` can't check
-                 ;;   whether the two collide. It so happens that, since we're
-                 ;;   putting the room at the far end of the corridor (and
-                 ;;   extending from it), then that can't happen. We rely on
-                 ;;   that invariant.
-                 (define new-ext
-                   (dir ext (if (horizontal? dir)
-                                (assert (sub1 (room-width corridor)) index?) ; sub1 to make abut
-                                (assert (sub1 (room-height corridor)) index?))))
-                 (cond [(new-room grid new-ext dir) =>
-                        (lambda (room) ; worked, commit both and keep going
-                          (add-room origin-room room ext corridor new-ext))]
-                       [else ; didn't fit, try again
-                        (values n-rooms-to-go rooms extension-points)]))]
-              [else ; didn't fit, try again
-               (values n-rooms-to-go rooms extension-points)])))))
+          ((= n-rooms-to-go 0)
+           (values n-rooms-to-go rooms extension-points))
+          (else
+           (define (add-room origin-room room ext [corridor #f] [new-ext #f])
+             (when corridor 
+               (commit-room grid corridor)
+               (define a (is-between? (unbox room-boundaries) #t))
+               (set-box! corridor_count (+ 1 (unbox corridor_count))))
+             (commit-room grid room)
+             (define b (is-between? (unbox room-boundaries) #t))
+             (set-box! room_count (+ 1 (unbox room_count)))
+             (cond [(not (equal? (unbox room_count) (room-counter grid)))
+                    (error "The room count does not match what is currently in the grid!\n" (unbox room_count) (display (show-grid grid)))])
+             ;; add doors
+             (define door-kind
+               (if (horizontal? dir) vertical-door% horizontal-door%))
+             (array-set! grid ext     (new door-kind))
+             (set-box! door_count (+ 1 (unbox door_count)))
+             (cond [(not (equal? (unbox door_count) (door-counter grid)))
+                    (error "The door count does not match what is currently in the grid!\n" (unbox door_count) (display (show-grid grid)))])
+             (when new-ext
+               (array-set! grid new-ext (new door-kind))
+               (set-box! door_count (+ 1 (unbox door_count))))
+             (cond [(not (equal? (unbox door_count) (door-counter grid)))
+                    (error "The door count does not match what is currently in the grid!\n" (unbox door_count) (display (show-grid grid)))])
+             (cond [(not (equal? (unbox corridor_count) (corridor-counter grid)))
+                    (error "The corridor count does not match what is currently in the grid!\n" (unbox corridor_count) (display (show-grid grid)))])
+             (cond [(not (equal? (unbox room_count) (room-counter grid)))
+                    (error "The room count does not match what is currently in the grid!\n" (unbox room_count) (display (show-grid grid)))])
+             (define c (is-between? (unbox room-boundaries) #t))
+             (set! connections (cons (cons origin-room room) connections))
+             (when animate-generation? (display (show-grid grid)))
+             (values (sub1 n-rooms-to-go)
+                     (cons room rooms) ; corridors don't count
+                     (append (if corridor
+                                 (extension-points/room corridor)
+                                 '())
+                             (extension-points/room room)
+                             extension-points)))
+           ;; pick an extension point at random
+           (match-define `(,ext . ,origin-room) (random-from extension-points))
+           ;; first, try branching a corridor at random
+           (define dir (random-direction))
+           (cond [(and (zero? (random-upto 4)) ; maybe add a room directly, no corridor
+                       (new-room grid ext dir)) =>
+                                                (lambda (room) (add-room origin-room room ext))]
+                 [(new-corridor grid ext dir) =>
+                                              (lambda (corridor)
+                                                ;; now try adding a room at the end
+                                                ;; Note: we don't commit the corridor until we know the room
+                                                ;;   fits. This means that `try-add-rectangle` can't check
+                                                ;;   whether the two collide. It so happens that, since we're
+                                                ;;   putting the room at the far end of the corridor (and
+                                                ;;   extending from it), then that can't happen. We rely on
+                                                ;;   that invariant.
+                                                (define new-ext
+                                                  (dir ext (if (horizontal? dir)
+                                                               (assert (sub1 (room-width corridor)) index?) ; sub1 to make abut
+                                                               (assert (sub1 (room-height corridor)) index?))))
+                                                (cond [(new-room grid new-ext dir) =>
+                                                                                   (lambda (room) ; worked, commit both and keep going
+                                                                                     (add-room origin-room room ext corridor new-ext))]
+                                                      [else ; didn't fit, try again
+                                                       (values n-rooms-to-go rooms extension-points)]))]
+                 [else ; didn't fit, try again
+                  (values n-rooms-to-go rooms extension-points)])))))
     (cond [(not (= n 0)) ; we got stuck, try again 
            ;(log-error "generate-dungeon: had to restart")
            ;; may have gotten too ambitious with n of rooms, back off
@@ -526,7 +746,17 @@
                                [else #f]))))
              (when (not (empty? possible-doors))
                (match-define (cons pos door-kind) (random-from possible-doors))
-               (array-set! grid pos (new door-kind))))
+               (array-set! grid pos (new door-kind))
+               (set-box! door_count (+ 1 (unbox door_count)))
+               (cond [(not (equal? (unbox door_count) (door-counter grid)))
+                      (error "The door count does not match what is currently in the grid!\n" (unbox door_count) (display (show-grid grid)))])))
+           (cond [(not (equal? (unbox door_count) (door-counter grid)))
+                  (error "The door count does not match what is currently in the grid!\n" door_count (display (show-grid grid)))])
+           (cond [(not (equal? (unbox corridor_count) (corridor-counter grid)))
+                  (error "The corridor count does not match what is currently in the grid!\n" corridor_count (display (show-grid grid)))])
+           (cond [(not (equal? (unbox room_count) (room-counter grid)))
+                  (error "The room count does not match what is currently in the grid!\n" room_count (display (show-grid grid)))])
+           
            grid])))
 
 
@@ -670,6 +900,7 @@
 
 (module+ test
   (require typed/rackunit)
+  (require test-engine/racket-tests)
 
   (define (render-grid g) (string-join g "\n" #:after-last "\n"))
 
@@ -711,430 +942,25 @@
                                "......"
                                "......"
                                "......")))
-
-  ;; ============================================================================================
-  ;; room counter function
-  (define (room-counter grid)
-    (define count 0)
-    (for ([i room_boundaries])
-      (define p1 (first i))
-      (define x1 (vector-ref p1 0))
-      (define y1 (vector-ref p1 1))
-      (define p2 (second i))
-      (define x2 (vector-ref p2 0))
-      (define y2 (vector-ref p2 1))
-      (define area (* (- x2 x1) (- y2 y1)))
-      (cond [(<= 36 area) (set! count (+ count 1))])
-      )
-    count
-    )
-  ;; ============================================================================================
-  ;; corridor counter function
   
-  (define (corridor_helper grid-split index-lst curr-index counted num-pairs)
-    (define num_pairs (- (length index-lst) 1))
-    (cond [(< num_pairs 1)
-           counted]
-          [else
-           (define front (list-ref index-lst 0))
-           (define back (list-ref index-lst 1))
-           (cond
-             [(>= (- back front) 3) 
-              (corridor_helper grid-split (rest index-lst) curr-index counted (- num-pairs 1))]
-             [(and
-               (equal? (vector-ref (vector-ref grid-split (+ curr-index 1)) front) (new wall%))
-               (equal? (vector-ref (vector-ref grid-split (- curr-index 1)) front) (new wall%))
-               
-               (or (equal? (vector-ref (vector-ref grid-split (+ curr-index 1)) (+ front 1)) (new wall%))
-                   (equal? (vector-ref (vector-ref grid-split (+ curr-index 1)) (+ front 1)) (new empty-cell%))
-                   (equal? (vector-ref (vector-ref grid-split (+ curr-index 1)) (+ front 1)) (new horizontal-door%)))
-               
-               (or (equal? (vector-ref (vector-ref grid-split (- curr-index 1)) (+ front 1)) (new wall%))
-                   (equal? (vector-ref (vector-ref grid-split (- curr-index 1)) (+ front 1)) (new empty-cell%))
-                   (equal? (vector-ref (vector-ref grid-split (- curr-index 1)) (+ front 1)) (new horizontal-door%)))
-
-               (equal? (vector-ref (vector-ref grid-split (- curr-index 1)) (+ front 2)) (new wall%))
-               (equal? (vector-ref (vector-ref grid-split (+ curr-index 1)) (+ front 2)) (new wall%))
-               )     
-              (set! counted (+ counted 1))
-              (corridor_helper grid-split (rest index-lst) curr-index counted (- num-pairs 1))]
-             [else (corridor_helper grid-split (rest index-lst) curr-index counted (- num-pairs 1))
-                   ]
-             )]))
-  (define (corridor-counter grid)
-    (define len (vector-length grid))
-    (define curr-index 0)
-    (define count 0)
-    (define index1 0) 
-    (define vert-lst '())
-    (for ([line grid])
-      (define index-lst '())
-      (define index2 0) 
-      (for ([i line]) 
-        (cond [(equal? i (new vertical-door%))
-               (set! index-lst (cons index2 index-lst))]
-              [(equal? i (new horizontal-door%))
-               (set! vert-lst (cons (list index1 index2) vert-lst))])
-        (set! index2 (+ index2 1)))
-      (set! index-lst (reverse index-lst))
-      (cond [(< 1 (length index-lst))
-             (define num_pairs (- (length index-lst) 1)) 
-             (define new_found_corr (corridor_helper grid index-lst curr-index 0 num_pairs))
-             (set! count (+ count new_found_corr))
-             ])
-      (set! curr-index (+ curr-index 1))
-      (set! index1 (+ 1 index1)))
-    (set! vert-lst (reverse vert-lst))
-    (for ([loc vert-lst])
-      (define x1 (first loc))
-      (define y1 (last loc))
-      (define other_pairs (rest vert-lst))
-      (for ([i other_pairs])
-        (unless (equal? i loc)
-          (define x2 (first i))
-          (define y2 (last i))
-          (define dist (- x2 x1))
-          (cond
-            [(and (equal? y1 y2) (< dist 3) (not (<= dist 0))) 
-             (define indicator #t)
-             (cond [(not
-                     (and
-                      (and
-                       (equal? (vector-ref (vector-ref grid (+ x1 0)) (- y1 1)) (new wall%))
-                       (equal? (vector-ref (vector-ref grid (+ x1 0)) (+ y1 1)) (new wall%))
-                       )
-                      (and
-                       (and 
-                        (or
-                         (equal? (vector-ref (vector-ref grid (+ x1 1)) (- y1 1)) (new wall%))
-                         (equal? (vector-ref (vector-ref grid (+ x1 1)) (- y1 1)) (new vertical-door%))
-                         (equal? (vector-ref (vector-ref grid (+ x1 1)) (- y1 1)) (new empty-cell%)))
-                        (or
-                         (equal? (vector-ref (vector-ref grid (+ x1 1)) (+ y1 1)) (new wall%))
-                         (equal? (vector-ref (vector-ref grid (+ x1 1)) (+ y1 1)) (new vertical-door%))
-                         (equal? (vector-ref (vector-ref grid (+ x1 1)) (+ y1 1)) (new empty-cell%))))
-                       (and
-                        (equal? (vector-ref (vector-ref grid (+ x1 2)) (+ y1 1)) (new wall%))
-                        (equal? (vector-ref (vector-ref grid (+ x1 2)) (- y1 1)) (new wall%))))))
-                    (set! indicator #f)])
-             (cond [(equal? indicator #t)
-                    (set! count (+ count 1))])]))))
-    count)
-  ;; ============================================================================================
-  ;; door counter function
-  (define (door-counter grid)
-    (define count 0)
-    (for ([line grid])
-      (for ([i line])
-        (cond [(or (equal? i (new horizontal-door%))
-                   (equal? i (new vertical-door%)))
-               (set! count (+ count 1))])))
-    count)
-  ;; ============================================================================================  
-  ;; helper function to gather the borders different rooms/corridors put into the grid
-  (define (dimensions-calc rooms)
-    (define beginning (first (room-poss->cells rooms)))
-    (match-define (cons pos1 cell1%) beginning)
-    (define end (last (room-poss->cells rooms)))
-    (match-define (cons pos2 cell2%) end)
-    (set! room_boundaries (cons (list pos1 pos2) room_boundaries)))
-  ;; ============================================================================================  
-  ;; grid-replace-checks: takes a replacement cell, and tests whether if can be place over the existing cell
-  (define (grid-replace-checks grid pos cell)
-    (define curr-cell (grid-ref grid pos))
-    (define x (vector-ref pos 0))
-    (define y (vector-ref pos 1))
-    (cond
-      [(equal? cell (new empty-cell%))
-       (if
-        (equal? curr-cell (new void-cell%))
-        void
-        (error "Not a valid placement for an empty-cell!\n")
-        ) ]
-      [(equal? cell (new wall%))
-       (if (equal? #t
-                   (or
-                    (equal? curr-cell (new wall%))
-                    (equal? curr-cell (new void-cell%))))
-           void
-           (error "Not a valid placement for a wall!\n")
-           )] 
-      [(equal? cell (new vertical-door%))
-       (if (equal? #t
-                   (and
-                    (equal? curr-cell (new wall%))
-                    (equal? (grid-ref grid (vector (+ x 1) y)) (new wall%))
-                    (equal? (grid-ref grid (vector (- x 1) y)) (new wall%))
-                    (equal? (grid-ref grid (vector x (+ y 1))) (new empty-cell%)) 
-                    (equal? (grid-ref grid (vector x (- y 1))) (new empty-cell%))))
-           void
-           (error "Not a valid placement for a vertical-door!\n")
-           )] 
-      [(equal? cell (new horizontal-door%))
-       (if
-        (equal? #t
-                (and
-                 (equal? curr-cell (new wall%))
-                 (equal? (grid-ref grid (vector x (+ y 1))) (new wall%))
-                 (equal? (grid-ref grid (vector x (- y 1))) (new wall%))
-                 (equal? (grid-ref grid (vector (+ x 1) y)) (new empty-cell%)) 
-                 (equal? (grid-ref grid (vector (- x 1) y)) (new empty-cell%))))
-        void
-        (error "not a valid placement for a horizontal door"))]))
-  ;; ============================================================================================  
-  (define (commit-room1 grid room)
-    (dimensions-calc room)
-    (for ([pos+cell% (in-list (room-poss->cells room))])
-      (match-define (cons pos cell%) pos+cell%)
-      (grid-replace-checks grid pos cell%)
-      (array-set! grid pos (new cell%))))
-  ;; ============================================================================================  
-  ;; modified version of generate-dungeon
-  ;; -- includes tracker variables such as room_boundaries, corridor, count, etc in order to track specific components, and ensure they operate together correctly
-  ;; -- this version is also broken apart into several helper functions
-  
-  (define connections-loc '())
-  (define room-count 0)
-  (define door-count 0)
-  (define corridor-count 0)
-  (define room_boundaries '())
-  (define (generate-dungeon-loc encounters)
-    (define n-rooms (max (length encounters) (random-between 6 9)))
-    (set! room-count 0)
-    (set! connections-loc '())
-    (set! door-count 0)
-    (set! corridor-count 0)
-    (set! room_boundaries '())
-    (define grid
-      (build-array (vector dungeon-height dungeon-width)
-                   (lambda _ (new void-cell%))))
-    (define first-room
-      (let loop  ()
-        (define starting-point
-          (vector (assert (random dungeon-height) index?)
-                  (assert (random dungeon-width) index?)))
-        (define first-room
-          (new-room grid starting-point (random-direction)))
-        (or first-room (loop)))) 
-    (commit-room1 grid first-room)
-    (when animate-generation? (display (show-grid grid)))
-  
-
-    (adding-loop grid n-rooms first-room encounters)
-    )
-  ;; ============================================================================================  
-  (define (extension-points/room-loc room)
-    (for/list  ([e (in-list (room-extension-points room))])
-      (cons e room)))
-  ;; ============================================================================================  
-  (define (add-room-loc grid dir n-rooms-to-go rooms extension-points origin-room room ext [corridor #f] [new-ext #f])
-    (when corridor
-      (commit-room1 grid corridor)
-      (set! corridor-count (+ 1 corridor-count))
-      (check-equal? (is-between? room_boundaries #t) #t))
-    ;(printf "grid before committing a room\n")
-    ;(display (show-grid grid))
-    (commit-room1 grid room)
-    ;(printf "grid after committing a room\n")
-    ;(display (show-grid grid))
-    (set! room-count (+ 1 room-count))
-    (check-equal? (is-between? room_boundaries #t) #t)
-    (define door-kind
-      (if (horizontal? dir) vertical-door% horizontal-door%))
-    (array-set! grid ext (new door-kind))
-    (set! door-count (+ 1 door-count))
-    (cond [(not (equal? door-count (door-counter grid)))
-           (error "The door count does not match what is currently in the grid!\n" door-count (display (show-grid grid)))])
-    (when new-ext
-      (array-set! grid new-ext (new door-kind))
-      (set! door-count (+ 1 door-count))) 
-    (cond [(not (equal? door-count (door-counter grid)))
-           (error "The door count does not match what is currently in the grid!\n" door-count (display (show-grid grid)))])
-    (cond [(not (equal? corridor-count (corridor-counter grid)))
-           (error "The corridor count does not match what is currently in the grid!\n" corridor-count (display (show-grid grid)))])
-    (cond [(not (equal? room-count (room-counter grid)))
-           (error "The room count does not match what is currently in the grid!\n" room-count (display (show-grid grid)))])
-    (check-equal? (is-between? room_boundaries #t) #t)
-    (set! connections-loc (cons (cons origin-room room) connections-loc))
-    (when animate-generation? (display (show-grid grid)))
-    (values (sub1 n-rooms-to-go)
-            (cons room rooms) ; corridors don't count
-            (append (if corridor
-                        (extension-points/room-loc corridor)
-                        '())
-                    (extension-points/room-loc room)
-                    extension-points)))
-  ;; ============================================================================================  
-  (define (adding-doors-loc grid all-rooms)
-    (define potential-connections
-               (for*/fold
-                ([potential-connections '()])
-                ([r1 (in-list all-rooms)]
-                 [r2 (in-list all-rooms)]
-                 #:unless (or (eq? r1 r2)
-                              (member (cons r1 r2) connections-loc)
-                              (member (cons r2 r1) connections-loc)
-                              (member (cons r2 r1) potential-connections)))
-                 (cons (cons r1 r2) potential-connections)))
-             (for ([r1+r2 (in-list potential-connections)])
-               (match-define (cons r1 r2) r1+r2)
-               (define common
-                 ;(set->list
-                 ;  (set-intersect (list->set (room-extension-points r1))
-                 ;                 (list->set (room-extension-points r2)))))
-                 (set-intersect (room-extension-points r1)
-                                (room-extension-points r2)))
-               (define possible-doors
-                 (filter (lambda (x) x)
-                         (for/list
-                             ([pos (in-list common)])
-                           (cond [(and (counts-as-free? grid (up   pos))
-                                       (counts-as-free? grid (down pos)))
-                                  (cons pos horizontal-door%)]
-                                 [(and (counts-as-free? grid (left  pos))
-                                       (counts-as-free? grid (right pos)))
-                                  (cons pos vertical-door%)]
-                                 [else #f]))))
-               (when (not (empty? possible-doors))
-                 (match-define (cons pos door-kind) (random-from possible-doors))
-                 (array-set! grid pos (new door-kind))
-                 (set! door-count (+ 1 door-count))
-                 (cond [(not (equal? door-count (door-counter grid)))
-                        (error "The door count does not match what is currently in the grid!\n" door-count (display (show-grid grid)))])))
-    )
-  ;; ============================================================================================  
-  (define (adding-loop grid n-rooms first-room encounters)
-    (set! room-count (+ 1 room-count))
-    (cond [(not (equal? room-count (room-counter grid)))
-           (error "The room count does not match what is currently in the grid!\n" room-count (display (show-grid grid)))])
-    
-    (let loop  ()
-      (define-values (n all-rooms _2)
-        (for/fold
-         ([n-rooms-to-go    (sub1 n-rooms)]
-          [rooms             (list first-room)]
-          [extension-points  (extension-points/room-loc first-room)])
-         ([i (in-range ITERS)])
-          (cond
-            ((= n-rooms-to-go 0) ;; no rooms left to add
-             (values n-rooms-to-go rooms extension-points))
-            (else ;; else
-             ;; pick an extension point at random
-             (match-define `(,ext . ,origin-room) (random-from extension-points))
-             ;; first, try branching a corridor at random
-             (define dir (random-direction))
-             (cond [(and (zero? (random 4)) ; maybe add a room directly, no corridor
-                         (new-room grid ext dir)) =>
-                                                  (lambda (room) (add-room-loc grid dir n-rooms-to-go rooms extension-points origin-room room ext))]
-                   [(new-corridor grid ext dir) =>
-                                                (lambda (corridor)
-                                                  ;; now try adding a room at the end
-                                                  ;; Note: we don't commit the corridor until we know the room
-                                                  ;;   fits. This means that `try-add-rectangle` can't check
-                                                  ;;   whether the two collide. It so happens that, since we're
-                                                  ;;   putting the room at the far end of the corridor (and
-                                                  ;;   extending from it), then that can't happen. We rely on
-                                                  ;;   that invariant.
-                                                  (define new-ext
-                                                    (dir ext (if (horizontal? dir)
-                                                                 (assert (sub1 (room-width corridor)) index?) ; sub1 to make abut
-                                                                 (assert (sub1 (room-height corridor)) index?))))
-                                                  (cond [(new-room grid new-ext dir) =>
-                                                                                     (lambda (room) ; worked, commit both and keep going
-                                                                                       (add-room-loc grid dir n-rooms-to-go rooms extension-points origin-room room ext corridor new-ext))]
-                                                        [else ; didn't fit, try again
-                                                         (values n-rooms-to-go rooms extension-points)]))]
-                   [else ; didn't fit, try again
-                    (values n-rooms-to-go rooms extension-points) 
-                    ])
-             ))))
-      (cond [(not (= n 0)) ; we got stuck, try again
-             ;(log-error "generate-dungeon: had to restart")
-             ;; may have gotten too ambitious with n of rooms, back off
-             (set! n-rooms (max (length encounters) (sub1 n-rooms)))
-             (loop)]
-            
-            [else ; we did it
-             ;; try adding more doors
-             ;(printf "all-rooms: ~a\n" all-rooms)
-             ;(printf "extension point: ~a\n" _2)
-             (adding-doors-loc grid all-rooms) 
-             grid]))
-
-    )
-  ;; ============================================================================================
-  ;; is-between?: takes all the rooms/corridors and determines if they overlap
-  ;; NOTE: having borders of rooms in the same place does not count, that is expected
-  
-  (define (is-between? pos-lst indicator)
-    (cond [(equal? (length (rest pos-lst)) 0) indicator]
-          [else 
-           (define p1 (first (first pos-lst)))
-           (define p4 (last (first pos-lst)))
-           (define x1 (vector-ref p1 0))
-           (define y1 (vector-ref p1 1))
-           (define x2 (vector-ref p4 0))
-           (define y2 (vector-ref p4 1))
-           (for ([remain (rest pos-lst)])
-             (define look-f (first remain))
-             (define x-start (vector-ref look-f 0))
-             (define y-start (vector-ref look-f 1))
-             (define look-b (last remain))
-             (define x-end (vector-ref look-b 0))
-             (define y-end (vector-ref look-b 1))
-             (cond
-               [(or
-                 (and
-                  (or
-                   (and
-                    (< x1 x-start)
-                    (< x-start x2))
-                   (and
-                    (< x1 x-end)
-                    (< x-end x2)))
-                  (or
-                   (and
-                    (< y1 y-start)
-                    (< y-start y2))
-                   (and
-                    (< y1 y-start)
-                    (< y-end y2))
-                   ))
-                 (and
-                  (or
-                   (and
-                    (< x-start x1)
-                    (< x1 x-end))
-                   (and
-                    (< x-start x2)
-                    (< x2 x-end)))
-                  (or
-                   (and
-                    (< y-start y1)
-                    (< y1 y-end))
-                   (and
-                    (< y-start y2)
-                    (< y2 y-end))))
-                 )
-                (error "This grid is not set up correctly! There are rooms that overlap/intersect")]
-               [else
-                (is-between? (rest pos-lst) indicator)]))])
-    indicator)
   ;; ============================================================================================
   ;; random testing
-  (for ([i (in-range 1000)])
-    (define gridout (generate-dungeon-loc (range 1)))
+  #;(for ([i (in-range 100)])
+    (define gridout (generate-dungeon (range 1)))
     (display (show-grid  gridout))
+    (define room-count (unbox room_count))
+    (define corridor-count (unbox corridor_count))
+    (define door-count (unbox door_count))
     (printf "room-count: ~a\n" room-count)
     (printf "door-count: ~a\n" door-count)
     (printf "corridor-count: ~a\n" corridor-count)
     (cond [(not (equal? door-count (door-counter gridout)))
-           (error "The door count does not match what is currently in the grid!\n" door-count (display (show-grid grid)))])
+           (error "The door count does not match what is currently in the grid!\n" door-count (display (show-grid gridout)))])
     (cond [(not (equal? corridor-count (corridor-counter gridout)))
-           (error "The corridor count does not match what is currently in the grid!\n" corridor-count (display (show-grid grid)))])
+           (error "The corridor count does not match what is currently in the grid!\n" corridor-count (display (show-grid gridout)))])
     (cond [(not (equal? room-count (room-counter gridout)))
-           (error "The room count does not match what is currently in the grid!\n" room-count (display (show-grid grid)))])
-    (check-equal? (is-between? room_boundaries #t) #t)
+           (error "The room count does not match what is currently in the grid!\n" room-count (display (show-grid gridout)))])
+    (check-equal? (is-between? (unbox room-boundaries) #t) #t)
     ;; smooth-walls
     )
   ;; For this integration test suite of the dungeon game, we seek to validate three properties for the grid 
@@ -1221,9 +1047,10 @@
     )
   ;; This is an example what a correct grid should look like, and the expected result
   ;(display (show-grid grid))
-  ;(check-equal? 4 (door-counter grid))
-  ;(check-equal? 2 (corridor-counter grid))
-  ;(check-equal? 3 (room-counter grid)) 
+  (set-box! room-boundaries '( (#(1 3) #(8 11)) (#(10 0) #(17 8)) (#(8 4) #(10 8)) (#(2 13) #(8 21)) (#(3 11) #(10 13))))
+  (check-equal? 4 (door-counter grid))
+  (check-equal? 2 (corridor-counter grid))
+  (check-equal? 3 (room-counter grid)) 
   
 
   
@@ -1240,7 +1067,7 @@
              (new wall%)(new wall%)(new wall%)(new wall%)(new wall%)(new wall%)(new wall%)(new wall%)(new wall%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%))
      ;; Row 3
      (vector (new void-cell%)(new void-cell%)(new void-cell%)(new wall%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new wall%)(new wall%)
-             (new wall%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new wall%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%))
+             (new wall%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new wall%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new  void-cell%)(new  void-cell%)(new  void-cell%))
      ;; Row 4
      (vector (new void-cell%)(new void-cell%)(new void-cell%)(new wall%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new wall%)(new empty-cell%)
              (new wall%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new empty-cell%)(new wall%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%))
@@ -1300,11 +1127,12 @@
       (new wall%) (new wall%) (new wall%) (new wall%) 
       (new wall%) (new wall%) (new wall%) (new wall%) (new wall%) (new  void-cell%) (new  void-cell%) (new  void-cell%)
       (new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%)(new  void-cell%)(new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%))))
-
+  
   ;(display (show-grid grid1))
-  ;(check-equal? 4 (door-counter grid1))
-  ;(check-equal? 2 (corridor-counter grid1))
-  ;(check-equal? 3 (room-counter grid1))
+  (check-equal? 2 (door-counter grid1))
+  (check-equal? 1 (corridor-counter grid1))
+  (check-equal? 3 (room-counter grid1))
+  (set-box! room-boundaries  '())
   
   ;; ============================================================================================
   ;; grid-replace-checks/object-replacement test demostration 
@@ -1343,11 +1171,12 @@
       )
     )
   ;(display (show-grid grid-ex1))
-  ;(grid-replace-checks grid-ex1 (vector 6 7) (new horizontal-door%))
-  ;(grid-replace-checks grid-ex1 (vector 5 7) (new horizontal-door%))
-  ;(grid-replace-checks grid-ex1 (vector 5 7) (new vertical-door%))
-  ;(grid-replace-checks grid-ex1 (vector 6 7) (new vertical-door%))
-  ;(array-set! grid-ex1 (vector 6 7) (new vertical-door%))
+
+  (check-error (grid-replace-checks grid-ex1 (vector 6 7) (new horizontal-door%)) "not a valid placement for a horizontal door")
+  (check-error (grid-replace-checks grid-ex1 (vector 5 7) (new horizontal-door%)) "not a valid placement for a horizontal door")
+  (check-error (grid-replace-checks grid-ex1 (vector 5 7) (new vertical-door%)) "not a valid placement for a vertical door")
+  (grid-replace-checks grid-ex1 (vector 6 7) (new vertical-door%))
+  (array-set! grid-ex1 (vector 6 7) (new vertical-door%))
   ;(display (show-grid grid-ex1))
 
   ;;
@@ -1368,25 +1197,26 @@
   ;;
   ;;
   ;;
-  #;(for ([i (in-range 6)])
-    (for ([j (in-range 6)])
-      (cond [(or (equal? i 0) (equal? i 6))
-             (grid-replace-checks grid-ex1 (vector (+ i 9) (+ j 11)) (new wall%))
-             (array-set! grid-ex1 (vector (+ i 9) (+ j 11)) (new wall%))]
-            [(or (equal? j 0) (equal? j 6))
-             (grid-replace-checks grid-ex1 (vector (+ i 9) (+ j 11)) (new wall%))
-             (array-set! grid-ex1 (vector (+ i 9) (+ j 11)) (new wall%))]
-            [else
-             (grid-replace-checks grid-ex1 (vector (+ i 9) (+ j 11)) (new empty-cell%))
-             (array-set! grid-ex1 (vector (+ i 9) (+ j 11)) (new empty-cell%))
-             ])))
+  (check-error (for ([i (in-range 6)])
+                 (for ([j (in-range 6)])
+                   (cond [(or (equal? i 0) (equal? i 6))
+                          (grid-replace-checks grid-ex1 (vector (+ i 9) (+ j 11)) (new wall%))
+                          (array-set! grid-ex1 (vector (+ i 9) (+ j 11)) (new wall%))]
+                         [(or (equal? j 0) (equal? j 6))
+                          (grid-replace-checks grid-ex1 (vector (+ i 9) (+ j 11)) (new wall%))
+                          (array-set! grid-ex1 (vector (+ i 9) (+ j 11)) (new wall%))]
+                         [else
+                          (grid-replace-checks grid-ex1 (vector (+ i 9) (+ j 11)) (new empty-cell%))
+                          (array-set! grid-ex1 (vector (+ i 9) (+ j 11)) (new empty-cell%))
+                          ])))
+               "not a valid placement for a wall")
   ;; ============================================================================================  
   ;; is-between/intersecting or overlapping room test demostration
-  
+  ;(is-between? '() #t)
   
   ;; standard expectation of rooms 
-  ;(define test-lst '(( #(5 0) #(14 8)) ( #(5 8) #(13 17)) ( #(1 17) #(7 25))))
-  ;(check-equal? (is-between? test-lst #t) #t)
+  (define test-lst '(( #(5 0) #(14 8)) ( #(5 8) #(13 17)) ( #(1 17) #(7 25))))
+  (check-equal? (is-between? test-lst #t) #t)
   ;;
   ;;                 XXXXXXXXX
   ;;                 X       X
@@ -1408,8 +1238,8 @@
   ;;
 
   ;; overlapping rooms/corridors
-  ;(define test-lst2 '(( #(5 0) #(14 8))  ( #(6 4) #(12 12))))
-  ;(check-equal? (is-between? test-lst2 #t) #t)
+  (define test-lst2 '(( #(5 0) #(14 8))  ( #(6 4) #(12 12))))
+  (check-error (is-between? test-lst2 #t) "This grid is not set up correctly! There are rooms that overlap/intersect")
   ;;
   ;;
   ;;
@@ -1428,10 +1258,10 @@
   ;;
 
   ;; rooms or corridors placed inside of eachother
-  ;(define test-lst3 '(( #(5 0) #(19 14))  ( #(9 3) #(14 9))))
-  ;(check-equal? (is-between? test-lst3 #t) #t)
-  ;(define test-lst4 '( ( #(9 3) #(14 9))  ( #(5 0) #(19 14))))
-  ;(check-equal? (is-between? test-lst4 #t) #t)
+  (define test-lst3 '(( #(5 0) #(19 14))  ( #(9 3) #(14 9))))
+  (check-error (is-between? test-lst3 #t) "This grid is not set up correctly! There are rooms that overlap/intersect")
+  (define test-lst4 '( ( #(9 3) #(14 9))  ( #(5 0) #(19 14))))
+  (check-error (is-between? test-lst4 #t) "This grid is not set up correctly! There are rooms that overlap/intersect")
 
   ;;
   ;;
