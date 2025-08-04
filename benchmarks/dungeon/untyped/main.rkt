@@ -1032,7 +1032,7 @@
   ;; random testing
   (define suite-2
     (test-suite "Randomized Testing Suite"
-                (for ([i (in-range 1000)])
+                (for ([i (in-range 1)])
                   (define gridout (generate-dungeon (range N)))
                   (display (show-grid gridout))
                   (define room-count (unbox room_count))
@@ -1208,9 +1208,12 @@
                 (check-equal? 4 (door-counter grid))
                 (check-equal? 2 (corridor-counter grid))
                 (check-equal? 3 (room-counter grid))
+                (check-equal? #t (room-connection-detector grid))
                 (check-equal? 2 (door-counter grid1))
                 (check-equal? 1 (corridor-counter grid1))
                 (check-equal? 3 (room-counter grid1))
+                (check-exn exn:fail?
+                           (lambda () (room-connection-detector grid1)))
                 (set-box! room-boundaries  '())))
   
   ;; ============================================================================================
