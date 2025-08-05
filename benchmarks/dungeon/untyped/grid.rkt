@@ -28,7 +28,19 @@
                         [result void?]
                         #:post (g p v) (equal? v (grid-ref g p)))]
               [types ((arrayof cell%?) array-coord? cell%? . -> . void?)])]
- [build-array ([max (->i ([p array-coord?]
+ [build-array ([trace (-> array-coord? (array-coord? . -> . cell%?)
+                          (make-chaperone-contract
+                           #:name 'vector-chaperone/c
+                           #:projection
+                           (λ (_b)
+                             (λ (v)
+                               (chaperone-vector
+                                v
+                                #f #f
+                                grid-prop
+                                (begin0 (unbox grid-idx)
+                                        (set-box! grid-idx (add1 (unbox grid-idx)))))))))]
+               [max (->i ([p array-coord?]
                           [f (array-coord? . -> . cell%?)])
                          [result (p)
                                  (and/c (arrayof cell%?)
@@ -143,17 +155,11 @@
 (define-values (grid-prop grid-prop? grid-prop-get)
   (make-impersonator-property 'grid-prop))
 
-(define build-array
-  (let ([grid-idx (box 0)])
-    (λ (p f)
-      (chaperone-vector
-       (for/vector ([x (in-range (vector-ref p 0))])
-         (for/vector ([y (in-range (vector-ref p 1))])
-           (f (vector (assert x index?) (assert y index?)))))
-       #f #f
-       grid-prop
-       (begin0 (unbox grid-idx)
-               (set-box! grid-idx (add1 (unbox grid-idx))))))))
+(define grid-idx (box 0))
+(define (build-array p f)
+  (for/vector ([x (in-range (vector-ref p 0))])
+    (for/vector ([y (in-range (vector-ref p 1))])
+      (f (vector (assert x index?) (assert y index?))))))
 
 ;; a Grid is a math/array Mutable-Array of cell%
 ;; (mutability is required for dungeon generation)
