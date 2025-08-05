@@ -8,6 +8,7 @@
   "../base/un-types.rkt"
   racket/match
   racket/contract
+  trace-contract
   (only-in "../../../ctcs/common.rkt" or-#f/c)
   "../../../ctcs/precision-config.rkt"
   "../../../ctcs/configurable.rkt"
@@ -272,6 +273,9 @@
        (>= cell-y min-y)
        (<= cell-y max-y)))
 
+;; Cannot write a trace contract for this function, since results are not
+;; deterministic
+
 (define (try-add-rectangle grid pos height width direction)
   ;; height and width include a wall of one cell wide on each side
   (match-define (vector x y) pos)
@@ -330,12 +334,69 @@
   (and success?
        (room height width poss->cells free-cells extension-points)))
 
+;; ========
+
+;; TODO contract to check that rooms abut
+
+(define-struct rect (min-x max-x min-y max-y))
+
+(define (rect-intersects? r1 r2)
+  (define (interval-intersects? i1-min i1-max i2-min i2-max)
+    (or (and (i1-min . < . i2-min)
+             (i1-max . > . i2-min))
+        (and (i1-min . < . i2-max)
+             (i1-max . > . i2-max))))
+  (and (interval-intersects? (rect-min-x r1) (rect-max-x r1)
+                             (rect-min-x r2) (rect-max-x r2))
+       (interval-intersects? (rect-min-y r1) (rect-max-y r1)
+                             (rect-min-y r2) (rect-max-y r2))))
+
+(define (room->rect room)
+  (let ([poss (map car (room-poss->cells room))])
+    (call-with-values
+     (lambda ()
+       (for/fold ([min-x +inf.0] [max-x -inf.0] [min-y +inf.0] [max-y -inf.0])
+                 ([pos poss])
+         (match-define (vector x y) pos)
+         (values (min min-x x) (max max-x x) (min min-y y) (max max-y y))))
+     rect)))
+
+(define (rect->string rect)
+  (format "rect(x: [~a, ~a], y: [~a, ~a])"
+          (rect-min-x rect) (rect-max-x rect) (rect-min-y rect) (rect-max-y rect)))
+
+(define commit-room-c/trace-ctc
+  (trace/c ([grid grid?]
+            [room room?])
+           (grid room . -> . void?)
+           (accumulate '()
+            [(grid room)
+             (λ (tr g r #:blame b)
+               (match-define (cons key cur-rects)
+                 (or (assoc g tr equal-always?)
+                     (cons g '())))
+               (define new-rect (room->rect r))
+               (or (for/or ([cur-rect cur-rects])
+                     (and (rect-intersects? new-rect cur-rect)
+                         (fail #:explain
+                               (λ () (raise-blame-error
+                                      b
+                                      commit-room
+                                      (format
+                                       "tried to add rect ~a, intersecting rect ~a"
+                                       (rect->string new-rect)
+                                       (rect->string cur-rect)))))))
+                   (cons (cons key (cons new-rect cur-rects))
+                         (remq key tr))))])))
+
+;; ========
+
 ;; mutate `grid` to add `room`
-(define (commit-room grid room)
+(define/contract (commit-room grid room)
+  commit-room-c/trace-ctc
   (for ([pos+cell% (in-list (room-poss->cells room))])
     (match-define (cons pos cell%) pos+cell%)
     (array-set! grid pos (new cell%))))
-
 
 (define (random-direction)
   (random-from (list left right up down)))
@@ -350,9 +411,10 @@
   ; higher than that (7 11) is hard to fit
   (define w (assert (random-between 7 11) index?))
   (define h (assert (random-between 7 11) index?))
-  (let [ (r (try-add-rectangle grid pos w h dir)) ]
+  #;(let [ (r (try-add-rectangle grid pos w h dir)) ]
     (displayln (format "w/h: (~a ~a), room: ~a" w h r))
-    r))
+    r)
+  (try-add-rectangle grid pos w h dir))
 
 (define (new-corridor grid pos dir)
   (define h? (horizontal? dir))
@@ -365,9 +427,10 @@
         (random-between 5 8)) index?))
   (define h (if h? 3   len))
   (define w (if h? len 3))
-  (let [ (r (try-add-rectangle grid pos w h dir)) ]
+  #;(let [ (r (try-add-rectangle grid pos w h dir)) ]
     (displayln (format "w/h: (~a ~a), corr: ~a" w h r))
-    r))
+    r)
+  (try-add-rectangle grid pos w h dir))
 
 
 (define/ctc-helper (door-count grid)
@@ -621,7 +684,7 @@
         [(_ _ _ _) (raise-user-error 'voidcase)])))))
 
 
-(define LOOPS 1)
+(define LOOPS 5)
 
 #;(define (main)
   (for ((_i (in-range LOOPS)))

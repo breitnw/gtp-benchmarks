@@ -165,17 +165,17 @@
             [p array-coord?]
             [v cell%?])
            (g p v . -> . void?)
-           (accumulate (hash)
+           (accumulate '()
             [(g p v)
             (λ (tr grid posn cell #:blame b)
-              (define current-cell%
-                (or (and (hash-has-key? tr grid)
-                         (hash-ref (hash-ref tr grid) posn #f))
-                    void-cell%))
+              (match-define (cons key tr/grid)
+                (or (assoc grid tr equal-always?)
+                    (cons grid (hash))))
+              (define current-cell% (hash-ref tr/grid posn void-cell%))
               (define-values (new-cell% _) (object-info cell))
               (if (allowed-transition? current-cell% new-cell%)
-                  (let [(posn-map (hash-ref tr grid (hash)))]
-                    (hash-set tr grid (hash-set posn-map posn new-cell%)))
+                  (cons (cons key (hash-set tr/grid posn new-cell%))
+                        (remq key tr))
                   (fail #:explain
                         (λ () (raise-blame-error
                                b
@@ -273,5 +273,4 @@
   (check-true (within-grid? g2* '#(4 4)))
   (check-false (within-grid? g2* '#(0 10)))
   (check-false (within-grid? g2* '#(5 0)))
-  (check-false (within-grid? g2* '#(5 10)))
-  )
+  (check-false (within-grid? g2* '#(5 10))))
