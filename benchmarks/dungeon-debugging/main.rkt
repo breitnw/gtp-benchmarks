@@ -1,14 +1,9 @@
 #lang racket
 
-;; -----------------------------------------------------------------------------
-
 (module server racket
   (require trace-contract)
-  (define-values (prop prop? prop-get) (make-impersonator-property 'prop))
-
   (provide
    (contract-out
-    [test-no-trace any/c]
     [test
      ;; changing object/c to any other contract (tried flat, arrow, box/c, etc)
      ;; seems to fix the issue
@@ -27,31 +22,24 @@
            bx
            (λ (_box val) val)
            (λ (_box val) val)
-           prop
-           3))))]))
+           box-prop-desc
+           "Not much to see here..."))))]))
+
+  (define-values (box-prop-desc box-prop? box-prop-access)
+    (make-impersonator-property 'box))
 
   (define (test b)
-    (displayln (format "(server, testing) ~a" (chaperone? b)))
-    (displayln (prop-get b)))
-
-  (define (test-no-trace b)
-    (displayln (format "(server, testing with no trace) ~a" (chaperone? b)))
-    (displayln (prop-get b)))
+    (displayln (format "Hello, am I a chaperone during test?\n ~a" (chaperone? b)))
+    (displayln (format "And, do I have a chaperone property test?\n ~a" (box-prop? b)))
+    (displayln (format "Oh, what is the property?\n ~a" (box-prop-access b))))
 
   (define my-box
     (box (new object%))))
 
-;; -----------------------------------------------------------------------------
-
 (module client racket
-  (require (submod ".." server))
-
-  (define b my-box)
-  (displayln (format "(client, before test) ~a" (chaperone? b)))
+  (require (submod ".." server))  (define b my-box)
+  (displayln (format "Hello, am I a chaperone before test?\n ~a" (chaperone? b)))
   (test b)
-  (test-no-trace b)
-  (displayln (format "(client, after test) ~a" (chaperone? b))))
-
-;; -----------------------------------------------------------------------------
+  (displayln (format "Hello, am I a chaperone after test?\n ~a" (chaperone? b))))
 
 (require 'client)
