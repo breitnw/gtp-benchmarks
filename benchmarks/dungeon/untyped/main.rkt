@@ -330,10 +330,29 @@
   (and success?
        (room height width poss->cells free-cells extension-points)))
 
+
+(define (helper pos1 pos2)
+  (match-define (vector x1 y1) pos1)
+  (match-define (vector x2 y2) pos2)
+  (define indi #f)
+  (for* ([i (in-range x1 (+ x2 1))]
+         [j (in-range y1 (+ y2 1))]
+         [curr-room (unbox room-boundaries)]
+         [k (in-range (vector-ref (first curr-room) 0) (+ (vector-ref (last curr-room) 0) 1))]
+         [l (in-range (vector-ref (first curr-room) 1) (+ (vector-ref (last curr-room) 1) 1))])
+    (cond [(and (equal? i k)
+                        (equal? j l))
+                   (set! indi #t)]))
+  (cond [(not indi)
+         (error "This room is not being added to a place that is connected to the dungeon environment!")])
+  )
+
 ;; mutate `grid` to add `room`
 (define (commit-room grid room)
   (match-define (cons pos1 cell1%) (first (room-poss->cells room)))
   (match-define (cons pos2 cell2%) (last (room-poss->cells room)))
+  (cond [(< 0 (length (unbox room-boundaries)))
+         (helper pos1 pos2)])
   (set-box! room-boundaries (cons (list pos1 pos2) (unbox room-boundaries)))
   (for ([pos+cell% (in-list (room-poss->cells room))])
     (match-define (cons pos cell%) pos+cell%)
@@ -431,6 +450,7 @@
                (or (equal? (vector-ref (vector-ref grid-split (- curr-index 1)) (+ front 1)) (new wall%))
                    (equal? (vector-ref (vector-ref grid-split (- curr-index 1)) (+ front 1)) (new empty-cell%))
                    (equal? (vector-ref (vector-ref grid-split (- curr-index 1)) (+ front 1)) (new horizontal-door%)))
+               (equal? (vector-ref (vector-ref grid-split curr-index) (+ front 1)) (new empty-cell%))
                (equal? (vector-ref (vector-ref grid-split (- curr-index 1)) (+ front 2)) (new wall%))
                (equal? (vector-ref (vector-ref grid-split (+ curr-index 1)) (+ front 2)) (new wall%)))     
               (set! counted (+ counted 1))
@@ -475,6 +495,7 @@
              (equal? (vector-ref (vector-ref grid (+ x1 1)) (+ y1 1)) (new wall%))
              (equal? (vector-ref (vector-ref grid (+ x1 1)) (+ y1 1)) (new vertical-door%))
              (equal? (vector-ref (vector-ref grid (+ x1 1)) (+ y1 1)) (new empty-cell%)))
+            (equal? (vector-ref (vector-ref grid (+ x1 1)) y1) (new empty-cell%))
             (equal? (vector-ref (vector-ref grid (+ x1 2)) (+ y1 1)) (new wall%))
             (equal? (vector-ref (vector-ref grid (+ x1 2)) (- y1 1)) (new wall%)))
            (set! count (+ count 1))]))))
@@ -516,7 +537,7 @@
           (define door-lst (door-finders grid loc))
           ;(printf "door-lst: ~a\n" door-lst) 
           (if (empty? door-lst)
-                     (error "This room is not connected to the bigger dungeon!!!!!!")   
+                     (error "This room is not connected to the bigger dungeon!")   
               (for ([door door-lst]) 
                 (define indi #f)
                 (for ([loc2 (unbox room-boundaries)])
@@ -534,7 +555,7 @@
                     ;(printf "indi: ~a\n" indi)
                     ))
                 (cond [(not indi)
-                       (error "Door is not placed in the correct place!!!!!!!")   
+                       (error "Door is not placed in the correct place!")   
                        ]))))
         #t)))
 ;; ============================================================================================  
@@ -577,7 +598,7 @@
            (equal? (grid-ref grid (vector x (- y 1))) (new wall%))
            (equal? (grid-ref grid (vector (+ x 1) y)) (new empty-cell%)) 
            (equal? (grid-ref grid (vector (- x 1) y)) (new empty-cell%))))
-       (error "not a valid placement for a horizontal door"))]))
+       (error "not a valid placement for a horizontal door!\n"))]))
 ;; ============================================================================================  
 (define (is-between? pos-lst indicator) ;; determine how to have no return
   (cond
@@ -838,7 +859,6 @@
                   (error "The room count does not match what is currently in the grid!\n")])
            (define a55 (room-connection-detector grid))
            (define c55 (is-between? (unbox room-boundaries) #t))
-           ;(printf "c55: ~a\n" c55)
            grid])))
 
 
@@ -982,7 +1002,7 @@
 
 (module+ test
   (require rackunit)
-  (require rackunit/text-ui)
+  ;(require rackunit/text-ui)
   (define (render-grid g) (string-join g "\n" #:after-last "\n"))
   (define (empty-grid)
     (build-array #(6 6) (lambda _ (new void-cell%))))
@@ -991,7 +1011,6 @@
   (define suite-1
     (test-suite
      "Basic Suite"
-     ;(test-case "Empty Grid"
      (check-equal? (show-grid g1)
                    (render-grid '("......"
                                   "......"
@@ -1008,7 +1027,6 @@
                                   ".XXX.."
                                   "......"
                                   "......")))
-     ;(check-equal? (room-counter g1) 1)
      (check-false (try-add-rectangle g1 #(2 2) 3 3 up))
      (commit-room g1 (or (try-add-rectangle g1 #(3 3) 3 3 down) (error 'commit)))
      (check-equal? (show-grid g1)
@@ -1032,7 +1050,7 @@
   ;; random testing
   (define suite-2
     (test-suite "Randomized Testing Suite"
-                (for ([i (in-range 1)])
+                (for ([i (in-range 100)])
                   (define gridout (generate-dungeon (range N)))
                   (display (show-grid gridout))
                   (define room-count (unbox room_count))
