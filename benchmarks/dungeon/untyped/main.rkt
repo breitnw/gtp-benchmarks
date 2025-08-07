@@ -342,10 +342,8 @@
 
 (define (rect-intersects? r1 r2)
   (define (interval-intersects? i1-min i1-max i2-min i2-max)
-    (or (and (i1-min . < . i2-min)
-             (i1-max . > . i2-min))
-        (and (i1-min . < . i2-max)
-             (i1-max . > . i2-max))))
+    (> (min i1-max i2-max)  ;; end of intersection
+       (max i1-min i2-min))) ;; start of intersection
   (and (interval-intersects? (rect-min-x r1) (rect-max-x r1)
                              (rect-min-x r2) (rect-max-x r2))
        (interval-intersects? (rect-min-y r1) (rect-max-y r1)
@@ -362,10 +360,10 @@
      rect)))
 
 (define (rect->string rect)
-  (format "rect(x: [~a, ~a], y: [~a, ~a])"
+  (format "(x: [~a, ~a], y: [~a, ~a])"
           (rect-min-x rect) (rect-max-x rect) (rect-min-y rect) (rect-max-y rect)))
 
-(define commit-room-c/trace-ctc
+(define commit-room-no-overlap-c/trace-ctc
   (trace/c ([grid grid?]
             [room room?])
            (grid room . -> . void?)
@@ -389,11 +387,66 @@
                    (cons (cons key (cons new-rect cur-rects))
                          (remq key tr))))])))
 
+(define (interval-abuts? i1-min i1-max i2-min i2-max)
+    (or (= i1-min i2-max)
+        (= i2-min i1-max)))
+  (define (interval-intersects-with-space-for-door? i1-min i1-max i2-min i2-max)
+    (>= (- (min i1-max i2-max)  ;; end of intersection
+           (max i1-min i2-min)) ;; start of intersection
+        2))
+
+(define (rect-abuts? r1 r2)
+  (define (interval-abuts? i1-min i1-max i2-min i2-max)
+    (or (= i1-min i2-max)
+        (= i2-min i1-max)))
+  (define (interval-intersects-with-space-for-door? i1-min i1-max i2-min i2-max)
+    (>= (- (min i1-max i2-max)  ;; end of intersection
+           (max i1-min i2-min)) ;; start of intersection
+        2))
+  (or (and (interval-abuts?
+            (rect-min-x r1) (rect-max-x r1)
+            (rect-min-x r2) (rect-max-x r2))
+           (interval-intersects-with-space-for-door?
+            (rect-min-y r1) (rect-max-y r1)
+            (rect-min-y r2) (rect-max-y r2)))
+      (and (interval-abuts?
+            (rect-min-y r1) (rect-max-y r1)
+            (rect-min-y r2) (rect-max-y r2))
+           (interval-intersects-with-space-for-door?
+            (rect-min-x r1) (rect-max-x r1)
+            (rect-min-x r2) (rect-max-x r2)))))
+
+#;(define commit-room-abuts-c/trace-ctc
+  (trace/c ([grid grid?]
+            [room room?])
+           (grid room . -> . void?)
+           (accumulate '()
+            [(grid room)
+             (λ (tr g r #:blame b)
+               (match-define (cons key cur-rects)
+                 (or (assoc g tr equal-always?)
+                     (cons g '())))
+               (define new-rect (room->rect r))
+               (if (not (for/or ([cur-rect cur-rects])
+                          )))
+               (or (for/or ([cur-rect cur-rects])
+                     (and (rect-intersects? new-rect cur-rect)
+                         (fail #:explain
+                               (λ () (raise-blame-error
+                                      b
+                                      commit-room
+                                      (format
+                                       "tried to add rect ~a, intersecting rect ~a"
+                                       (rect->string new-rect)
+                                       (rect->string cur-rect)))))))
+                   (cons (cons key (cons new-rect cur-rects))
+                         (remq key tr))))])))
 ;; ========
 
 ;; mutate `grid` to add `room`
 (define/contract (commit-room grid room)
-  commit-room-c/trace-ctc
+  (and/c commit-room-no-overlap-c/trace-ctc
+         #;commit-room-abuts-c/trace-ctc)
   (for ([pos+cell% (in-list (room-poss->cells room))])
     (match-define (cons pos cell%) pos+cell%)
     (array-set! grid pos (new cell%))))
