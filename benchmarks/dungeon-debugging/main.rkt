@@ -4,14 +4,9 @@
   (require trace-contract)
   (provide
    (contract-out
-    [test
-     ;; changing object/c to any other contract (tried flat, arrow, box/c, etc)
-     ;; seems to fix the issue
-     (trace/c ([g (box/c (object/c))])
-              ;; Problem only arises when the collector intercepts the value.
-              ;; Fixed by replacing g with any/c
-              (g . -> . void?)
-              (full (g) (λ (_tr) #t)))]
+    ;; changing object/c to any other contract (tried flat, arrow, box/c, etc)
+    ;; seems to fix the issue
+    [test ((box/c (object/c)) . -> . void?)]
     [my-box
      (make-chaperone-contract
       #:name 'test-chaperone/c
@@ -30,6 +25,7 @@
 
   (define (test b)
     (displayln (format "Hello, am I a chaperone during test?\n ~a" (chaperone? b)))
+    (displayln (format "Hello, am I an impersonator during test?\n ~a" (impersonator? b)))
     (displayln (format "And, do I have a chaperone property test?\n ~a" (box-prop? b)))
     (displayln (format "Oh, what is the property?\n ~a" (box-prop-access b))))
 
