@@ -340,14 +340,32 @@
 
 (define-struct rect (min-x max-x min-y max-y))
 
+(define ((interval-intersects?/min-intersection-size size) i1-min i1-max i2-min i2-max)
+  ;; add 1 to the difference between the start and end of the intersection,
+  ;; since we're working with closed intervals
+  (>= (add1 (- (min i1-max i2-max)  ;; end of intersection
+               (max i1-min i2-min))) ;; start of intersection
+      size))
+
 (define (rect-intersects? r1 r2)
-  (define (interval-intersects? i1-min i1-max i2-min i2-max)
-    (> (min i1-max i2-max)  ;; end of intersection
-       (max i1-min i2-min))) ;; start of intersection
+  ;; in order for two intervals to be intersecting, they need to share two cells
+  ;; (one shared cell is just abutting)
+  (define interval-intersects? (interval-intersects?/min-intersection-size 2))
   (and (interval-intersects? (rect-min-x r1) (rect-max-x r1)
                              (rect-min-x r2) (rect-max-x r2))
        (interval-intersects? (rect-min-y r1) (rect-max-y r1)
                              (rect-min-y r2) (rect-max-y r2))))
+
+;; rect-intersects? tests
+(module+ test
+  (check-equal? (rect-intersects? (rect 0 3 0 3) (rect 0 3 0 3)) #t)
+  (check-equal? (rect-intersects? (rect 0 3 0 3) (rect 0 3 3 6)) #f)
+  (check-equal? (rect-intersects? (rect 0 3 0 3) (rect 2 6 2 6)) #t)
+  (check-equal? (rect-intersects? (rect 0 3 0 3) (rect 3 6 2 6)) #f)
+
+  (check-equal? (rect-intersects? (rect 0 3 3 6) (rect 0 3 0 3)) #f)
+  (check-equal? (rect-intersects? (rect 2 6 2 6) (rect 0 3 0 3)) #t)
+  (check-equal? (rect-intersects? (rect 3 6 2 6) (rect 0 3 0 3)) #f))
 
 (define (room->rect room)
   (let ([poss (map car (room-poss->cells room))])
@@ -381,28 +399,18 @@
                                       b
                                       commit-room
                                       (format
-                                       "tried to add rect ~a, intersecting rect ~a"
+                                       "Tried to add rect ~a, intersecting rect ~a"
                                        (rect->string new-rect)
                                        (rect->string cur-rect)))))))
                    (cons (cons key (cons new-rect cur-rects))
                          (remq key tr))))])))
 
-(define (interval-abuts? i1-min i1-max i2-min i2-max)
-    (or (= i1-min i2-max)
-        (= i2-min i1-max)))
-  (define (interval-intersects-with-space-for-door? i1-min i1-max i2-min i2-max)
-    (>= (- (min i1-max i2-max)  ;; end of intersection
-           (max i1-min i2-min)) ;; start of intersection
-        2))
-
 (define (rect-abuts? r1 r2)
   (define (interval-abuts? i1-min i1-max i2-min i2-max)
     (or (= i1-min i2-max)
         (= i2-min i1-max)))
-  (define (interval-intersects-with-space-for-door? i1-min i1-max i2-min i2-max)
-    (>= (- (min i1-max i2-max)  ;; end of intersection
-           (max i1-min i2-min)) ;; start of intersection
-        2))
+  (define interval-intersects-with-space-for-door?
+    (interval-intersects?/min-intersection-size 3))
   (or (and (interval-abuts?
             (rect-min-x r1) (rect-max-x r1)
             (rect-min-x r2) (rect-max-x r2))
@@ -416,7 +424,30 @@
             (rect-min-x r1) (rect-max-x r1)
             (rect-min-x r2) (rect-max-x r2)))))
 
-#;(define commit-room-abuts-c/trace-ctc
+;; rect-abuts? tests
+(module+ test
+  ;; overlapping
+  (check-equal? (rect-abuts? (rect 0 3 0 3) (rect 0 3 0 3)) #f)
+  (check-equal? (rect-abuts? (rect 0 3 0 3) (rect 1 4 2 6)) #f)
+
+  ;; not touching
+  (check-equal? (rect-abuts? (rect 0 3 0 3) (rect 4 7 4 7)) #f)
+
+  ;; abutting (x)
+  (check-equal? (rect-abuts? (rect 0 3 0 3) (rect 3 6 0 3)) #t)
+  (check-equal? (rect-abuts? (rect 0 3 0 3) (rect 3 6 1 4)) #t)
+  (check-equal? (rect-abuts? (rect 3 6 0 3) (rect 0 3 0 3)) #t)
+  ;; no room for door (x)
+  (check-equal? (rect-abuts? (rect 0 3 0 3) (rect 3 6 2 5)) #f)
+
+  ;; abutting (y)
+  (check-equal? (rect-abuts? (rect 0 3 0 3) (rect 0 3 3 6)) #t)
+  (check-equal? (rect-abuts? (rect 0 3 0 3) (rect 1 4 3 6)) #t)
+  (check-equal? (rect-abuts? (rect 0 3 3 6) (rect 0 3 0 3)) #t)
+  ;; no room for door (y)
+  (check-equal? (rect-abuts? (rect 0 3 0 3) (rect 3 6 2 5)) #f))
+
+(define commit-room-abuts-c/trace-ctc
   (trace/c ([grid grid?]
             [room room?])
            (grid room . -> . void?)
@@ -427,18 +458,20 @@
                  (or (assoc g tr equal-always?)
                      (cons g '())))
                (define new-rect (room->rect r))
-               (if (not (for/or ([cur-rect cur-rects])
-                          )))
-               (or (for/or ([cur-rect cur-rects])
-                     (and (rect-intersects? new-rect cur-rect)
-                         (fail #:explain
-                               (λ () (raise-blame-error
-                                      b
-                                      commit-room
-                                      (format
-                                       "tried to add rect ~a, intersecting rect ~a"
-                                       (rect->string new-rect)
-                                       (rect->string cur-rect)))))))
+               (if (not (or (empty? cur-rects)
+                            (for/or ([cur-rect cur-rects])
+                              (rect-abuts? new-rect cur-rect))))
+                   (fail #:explain
+                         (λ ()
+                           (raise-blame-error
+                            b commit-room
+                            (format
+                             (string-append
+                              "Rect ~a must abut at least one other rect with"
+                              "space for a door, but did not.\n"
+                              "Other rects: ~a")
+                             (rect->string new-rect)
+                             (map rect->string cur-rects)))))
                    (cons (cons key (cons new-rect cur-rects))
                          (remq key tr))))])))
 ;; ========
@@ -446,7 +479,7 @@
 ;; mutate `grid` to add `room`
 (define/contract (commit-room grid room)
   (and/c commit-room-no-overlap-c/trace-ctc
-         #;commit-room-abuts-c/trace-ctc)
+         commit-room-abuts-c/trace-ctc)
   (for ([pos+cell% (in-list (room-poss->cells room))])
     (match-define (cons pos cell%) pos+cell%)
     (array-set! grid pos (new cell%))))
@@ -796,7 +829,8 @@
                                "......")))
   (check-false (try-add-rectangle g1 #(2 2) 3 3 up))
   (commit-room g1 (or (try-add-rectangle g1 #(3 3) 3 3 down) (error 'commit)))
-  (check-equal? (show-grid g1)
+  ;; this is (correctly) illegal according to the trace contract!
+  #;(check-equal? (show-grid g1)
                 (render-grid '("......"
                                ".XXX.."
                                ".X X.."
