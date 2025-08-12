@@ -668,12 +668,12 @@
 (module+ test
   (require rackunit)
   ;(require rackunit/text-ui)
-  ;(define (render-grid g) (string-join g "\n" #:after-last "\n"))
-  #;(define (empty-grid)
+  (define (render-grid g) (string-join g "\n" #:after-last "\n"))
+  (define (empty-grid)
     (build-array #(6 6) (lambda _ (new void-cell%))))
-  ;(define g1 (empty-grid))
-  ;(define g2 (empty-grid))
-  #;(define suite-1
+  (define g1 (empty-grid))
+  (define g2 (empty-grid))
+  (define suite-1
     (test-suite
      "Basic Suite"
      (check-equal? (show-grid g1)
@@ -720,19 +720,6 @@
   (define door_count (box 0))
   (define room-boundaries (box '()))
 
-  (define (room-budding-detecting rooms-bounds)
-    (printf "")
-    (define it 0)
-    (for* ([loc rooms-bounds]
-           ;[]
-           ;[]
-           ;[]
-           ;[]
-           ;[]
-           )
-      (printf "")
-      )
-    )
   (define (room-budding-detection pos1 pos2)
     (match-define (vector x1 y1) pos1)
     (match-define (vector x2 y2) pos2)
@@ -848,25 +835,15 @@
   (define (x-depth grid x-pos y-pos)
     ;(printf "x-pos: ~a\n" x-pos)
     (cond
-
-      ;;
-      ;;
-      ;;
-      ;;
       [(and
         (equal? (grid-ref grid (vector (+ 1 x-pos) y-pos)) (new wall%))
         (or (equal? (grid-ref grid (vector (+ 1 x-pos) (+ y-pos 1))) (new wall%))
             (equal? (grid-ref grid (vector (+ 1 x-pos) (+ y-pos 1))) (new horizontal-door%))))
        (+ 1 x-pos)]
-      ;;
-      ;;
-      ;;
-      ;;
       [(or
         (equal? (grid-ref grid (vector (+ 1 x-pos) y-pos)) (new vertical-door%))
         (equal? (grid-ref grid (vector (+ 1 x-pos) y-pos)) (new wall%)))
-       (x-depth grid (+ x-pos 1) y-pos)
-       ]
+       (x-depth grid (+ x-pos 1) y-pos)]
       [else
        x-pos]))
   ;; ============================================================================================
@@ -948,8 +925,7 @@
           )      
         )
       )
-    (and indi (equal? count (empty-counter grid1)))
-    )
+    (and indi (equal? count (empty-counter grid1))))
   ;; ============================================================================================  
   (define (doors-correct-placement? grid)
     (define indi #t)
@@ -971,12 +947,8 @@
                           (equal? (new empty-cell%) (grid-ref grid (vector (- i 1) j)))
                           (equal? (new wall%) (grid-ref grid (vector i (+ j 1))))
                           (equal? (new wall%) (grid-ref grid (vector i (- j 1)))))))
-               (set! indi #f)])
-        )
-      )
-    (printf "indi: ~a\n" indi)
-    indi
-    )
+               (set! indi #f)])))
+    indi)
   ;; ============================================================================================  
   ;; grid-replace-checks: takes a replacement cell, and tests whether if can be place over the existing cell
   (define (grid-replace-checks grid pos cell)
@@ -1106,7 +1078,6 @@
             (is-between? (rest pos-lst) indicator)]))])
     indicator)
   ;; ============================================================================================  
-
   (define (share-sublists? lst1 lst2)
     (ormap (λ (x) (member x lst1)) lst2))
   ;; ============================================================================================  
@@ -1127,72 +1098,36 @@
           ;(printf "j-doors: ~a\n" j-doors)
           (cond [(share-sublists? i-doors j-doors)
                  ;(printf "found a connection\n")
-                 (vector-set! (vector-ref a-m i) j 1)
-                 #;(printf "matrix: ~a\n" a-m)]) 
-          )
-        )
-      )
-    ;(printf "rooms-bounds: ~a\n" rooms-bounds)
-    ;(printf "matrix: ~a\n" a-m)
+                 (vector-set! (vector-ref a-m i) j 1)]))))
     (define reached (make-vector (length rooms-bounds) #f))
     (define (visit pos)
       (vector-set! reached pos #t)
       (for ([i (in-range (length rooms-bounds))])
         (cond [(and (not (vector-ref reached i))
                     (equal? (vector-ref (vector-ref a-m pos) i) 1))
-               (visit i)])
-        )
-      )
-    
+               (visit i)])))
     (visit 0)
-    ;(printf "reached: ~a\n" reached)
     (for/and ([v (in-vector reached)])
-      v)
-    )
+      v))
   ;; ============================================================================================
   (define (door-finder grid poses)
     ;(printf "in door finder \n")
     (match-define (list (vector x1 y1) (vector x2 y2)) poses)
-    ;(printf "x1: ~a\n" x1)
-    ;(printf "x2: ~a\n" x2)
-    ;(printf "y1: ~a\n" y1)
-    ;(printf "y2: ~a\n" y2)
     (define door-poses '())
     (for ([i (in-range y1 y2)])
-      ;(printf "checking cell at (~a, ~a): ~a\n" x1 i (grid-ref grid (vector x1 i)))
-      ;(printf "checking cell at (~a, ~a): ~a\n" x2 i (grid-ref grid (vector x2 i)))
       (cond [
              (equal? (new horizontal-door%) (grid-ref grid (vector x1 i)))
-              
-             ;(printf "found a door \n")
-             (set! door-poses (cons (list x1 i) door-poses))
-             #;(printf "updated door-poses: ~a\n" door-poses)])
+             (set! door-poses (cons (list x1 i) door-poses))])
       (cond 
-        [
-         (equal? (new horizontal-door%) (grid-ref grid (vector x2 i)))
-              
-         ;(printf "found a door: \n")
-         (set! door-poses (cons (list x2 i) door-poses))
-         #;(printf "updated door-poses: ~a\n" door-poses)])
-      )
-      
+        [(equal? (new horizontal-door%) (grid-ref grid (vector x2 i)))
+         (set! door-poses (cons (list x2 i) door-poses))]))
     (for ([i (in-range x1 x2)])
-      ;(printf "checking cell at (~a, ~a): ~a\n" i y1 (grid-ref grid (vector i y1)))
-      ;(printf "checking cell at (~a, ~a): ~a\n" i y2 (grid-ref grid (vector i y2)))
       (cond [
              (equal? (new vertical-door%) (grid-ref grid (vector i y1)))
-              
-             ;(printf "found a door: \n")
-             (set! door-poses (cons (list i y1) door-poses))
-             #;(printf "updated door-poses: ~a\n" door-poses)])
+             (set! door-poses (cons (list i y1) door-poses))])
       (cond  [(equal? (new vertical-door%) (grid-ref grid (vector i y2)))
-              ;(printf "found a door: \n")
-              (set! door-poses (cons (list i y2) door-poses))
-              #;(printf "updated door-poses: ~a\n" door-poses)])
-      )
-    ;(printf "updated door-poses: ~a\n" door-poses)
-    door-poses
-    )
+              (set! door-poses (cons (list i y2) door-poses))]))
+    door-poses)
   ;; ============================================================================================  
   ;; ll: temporal: this should display things IF `animate-generation?`
   (define (generate-dungeon-loc encounters)
@@ -1219,8 +1154,7 @@
   
     (define grid
       (build-array (vector dungeon-height dungeon-width)
-                   (lambda _ (new void-cell%)))) ;; new cell created : call to void-cell%
-  
+                   (lambda _ (new void-cell%)))) 
     (define first-room
       (let loop  ()
         (define starting-point
@@ -1373,13 +1307,13 @@
 
   (define suite-6
     (test-suite "Real Generate Dungeon Testing Suite"
-                (for ([i (in-range 500)])
+                (for ([i (in-range 5000)])
                   (define grid-real (generate-dungeon (range N)))
                   (display (show-grid grid-real))
                   (define room-corridor-lst (room&corridor-counter-contd grid-real))
                   (define corridor1-out (corridor-counter-backup grid-real room-corridor-lst))
                   (define corridor2-out (corridor-counter grid-real))
-                  (define door-out (door-counter grid-real)) 
+                  (define door-out (door-counter grid-real))
                   (define room-out (room-counter grid-real room-corridor-lst))
                   (check-true (is-between? room-corridor-lst #t))
                   (check-equal? corridor1-out corridor2-out)
@@ -1397,10 +1331,7 @@
                         [else
                          (check-equal? door-out 0)])
                   (check-true (is-all-empty? grid-real room-corridor-lst))
-                  (printf "output: ~a\n" (doors-correct-placement? grid-real))
-                  (check-true (doors-correct-placement? grid-real))
-                  
-                  )))
+                  (check-true (doors-correct-placement? grid-real)))))
   (define suite-2
     (test-suite "Randomized Testing Suite"
                 (for ([i (in-range 1)])
@@ -1509,7 +1440,7 @@
                  (new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%)(new  void-cell%)(new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%)
                  )))
   
- #; (define grid1 (vector
+ #;(define grid1 (vector
                  ;; Row 0
                  (vector (new void-cell%) (new void-cell%) (new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)
                          (new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%)(new void-cell%))
@@ -1972,13 +1903,13 @@
     (define errors   (count test-error? results))
     (printf "Test Suite ~a Results: ~a success(es), ~a failure(s), ~a error(s)\n" num successes failures errors))
   
-  ;(define results1 (run-test suite-1))
+  (define results1 (run-test suite-1))
   (define results2 (run-test suite-2))
   ;(define results3 (run-test suite-3))
   ;(define results4 (run-test suite-4))
   ;(define results5 (run-test suite-5))
   (define results6 (run-test suite-6))
-  ;(summarize results1 1)
+  (summarize results1 1)
   (summarize results2 2)
   ;(summarize results3 3)
   ;(summarize results4 4)
