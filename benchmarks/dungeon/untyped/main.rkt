@@ -414,8 +414,8 @@
   (define first-room
     (let loop  ()
       (define starting-point
-        (vector (assert (random dungeon-height) index?)
-                (assert (random dungeon-width) index?)))
+        (vector (assert (random-upto dungeon-height) index?)
+                (assert (random-upto dungeon-width) index?)))
       (define first-room
         (new-room grid starting-point (random-direction)))
       (or first-room (loop)))) ; if it doesn't fit, try again
@@ -848,11 +848,20 @@
   (define (x-depth grid x-pos y-pos)
     ;(printf "x-pos: ~a\n" x-pos)
     (cond
+
+      ;;
+      ;;
+      ;;
+      ;;
       [(and
         (equal? (grid-ref grid (vector (+ 1 x-pos) y-pos)) (new wall%))
         (or (equal? (grid-ref grid (vector (+ 1 x-pos) (+ y-pos 1))) (new wall%))
             (equal? (grid-ref grid (vector (+ 1 x-pos) (+ y-pos 1))) (new horizontal-door%))))
        (+ 1 x-pos)]
+      ;;
+      ;;
+      ;;
+      ;;
       [(or
         (equal? (grid-ref grid (vector (+ 1 x-pos) y-pos)) (new vertical-door%))
         (equal? (grid-ref grid (vector (+ 1 x-pos) y-pos)) (new wall%)))
@@ -908,11 +917,21 @@
                   (+ sub-total 1)]
                  [else
                   (+ 0 sub-total)])))))
-  ;; ============================================================================================  
+  ;; ============================================================================================
+  (define (empty-counter grid)
+    (for/fold ([total 0]) ([line grid])
+      (+ total
+         (for/fold ([sub-total 0]) ([i line])
+           (cond [(equal? i (new empty-cell%))
+                  (+ sub-total 1)]
+                 [else
+                  (+ 0 sub-total)])))))
+  ;; ============================================================================================
   (define (is-all-empty? grid1 rooms-bounds)
     ;(printf "\n")
     ;(display (show-grid grid1))
     ;(printf "\n")
+    (define count 0)
     (define indi #t)
     (for ([loc rooms-bounds])
       ;(printf "printing loc: ~a\n" loc)
@@ -923,10 +942,39 @@
           ;(printf "printing i ~a j: ~a\n" i j)
           ;(printf "printing grid cell: ~a\n" (grid-ref grid1 (vector i j))) 
           (cond [(not (equal? (new empty-cell%) (grid-ref grid1 (vector i j)))) 
-                 (set! indi #f)])
+                 (set! indi #f)]
+                [else
+                 (set! count (+ count 1))])
           )      
         )
       )
+    (and indi (equal? count (empty-counter grid1)))
+    )
+  ;; ============================================================================================  
+  (define (doors-correct-placement? grid)
+    (define indi #t)
+    (define x (vector-length grid))
+    (define y (vector-length (vector-ref grid 0)))
+    (for ([i (in-range 0 x)])
+      (for ([j (in-range 0 y)])
+        (cond [(and (equal? (new vertical-door%) (grid-ref grid (vector i j)))
+                    (not
+                     (and
+                      (equal? (grid-ref grid (vector (+ i 1) j)) (new wall%))
+                      (equal? (grid-ref grid (vector (- i 1) j)) (new wall%))
+                      (equal? (grid-ref grid (vector i (+ j 1))) (new empty-cell%)) 
+                      (equal? (grid-ref grid (vector i (- j 1))) (new empty-cell%)))))
+               (set! indi #f)]
+              [(and (equal? (new horizontal-door%) (grid-ref grid (vector i j)))
+                    (not (and 
+                          (equal? (new empty-cell%) (grid-ref grid (vector (+ i 1) j)))
+                          (equal? (new empty-cell%) (grid-ref grid (vector (- i 1) j)))
+                          (equal? (new wall%) (grid-ref grid (vector i (+ j 1))))
+                          (equal? (new wall%) (grid-ref grid (vector i (- j 1)))))))
+               (set! indi #f)])
+        )
+      )
+    (printf "indi: ~a\n" indi)
     indi
     )
   ;; ============================================================================================  
@@ -1320,22 +1368,19 @@
                     (error "The room count does not match what is currently in the grid!\n")])
              (cond [(not (equal? #t (room-connection-seeker grid (unbox room-boundaries))))
                     (error "The rooms and or corridors are not boarding eachother!\n")])
-             ;(define a55 (room-connection-detector grid (unbox room-boundaries)))
              (define c55 (is-between? (unbox room-boundaries) #t))
              grid])))
 
   (define suite-6
     (test-suite "Real Generate Dungeon Testing Suite"
-                (for ([i (in-range 1)])
+                (for ([i (in-range 500)])
                   (define grid-real (generate-dungeon (range N)))
                   (display (show-grid grid-real))
-                  ;(printf "\n")
                   (define room-corridor-lst (room&corridor-counter-contd grid-real))
                   (define corridor1-out (corridor-counter-backup grid-real room-corridor-lst))
                   (define corridor2-out (corridor-counter grid-real))
                   (define door-out (door-counter grid-real)) 
                   (define room-out (room-counter grid-real room-corridor-lst))
-                  
                   (check-true (is-between? room-corridor-lst #t))
                   (check-equal? corridor1-out corridor2-out)
                   (check-equal? (length room-corridor-lst) (+ room-out corridor2-out))
@@ -1345,17 +1390,15 @@
                                       corridor1-out))
                          (check-equal? door-out (* 2 corridor1-out))])
                   (cond [(< 1 room-out)
-                         ;(printf "p1: ~a\n" (<= 1 door-out))
-                         #;(printf "p2: ~a\n" (<= door-out
-                                                  (* 2 (- room-out 1))))
                          (check-true (and
                                       (<= 1 door-out)
                                       (<= door-out
                                           (* 2 (- room-out 1)))))]
                         [else
                          (check-equal? door-out 0)])
-                  ;(printf "output 3: ~a\n" (is-all-empty? grid-real room-corridor-lst))
                   (check-true (is-all-empty? grid-real room-corridor-lst))
+                  (printf "output: ~a\n" (doors-correct-placement? grid-real))
+                  (check-true (doors-correct-placement? grid-real))
                   
                   )))
   (define suite-2
@@ -1383,9 +1426,9 @@
                   (check-equal? corridor-count (corridor-counter gridout))
                   (check-equal? corridor-count (corridor-counter-backup gridout (unbox room-boundaries)))
                   (check-equal? room-count (room-counter gridout (unbox room-boundaries)))
-                  (check-equal? (is-between? (unbox room-boundaries) #t) #t)
-                  (check-equal? (is-between? room+corridorattempt #t) #t)
-                  #;(check-equal? (room-connection-detector gridout (unbox room-boundaries)) #t))))
+                  (check-true (is-between? (unbox room-boundaries) #t))
+                  (check-true (is-between? room+corridorattempt #t))
+                  (check-true (is-all-empty? gridout room+corridorattempt)))))
   ;; ============================================================================================
   ;; door -- corridor -- room calculation test demostration
   ;; Counting doors, corridors, & rooms works the use of variables and helper functions
@@ -1538,6 +1581,7 @@
                   (new wall%) (new wall%) (new wall%) (new wall%) 
                   (new wall%) (new wall%) (new wall%) (new wall%) (new wall%) (new  void-cell%) (new  void-cell%) (new  void-cell%)
                   (new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%)(new  void-cell%)(new  void-cell%) (new  void-cell%) (new  void-cell%) (new  void-cell%))))
+
   #;(define suite-3
     (test-suite "Door-Corridor-Room Suite"
                 (set-box! room-boundaries '( (#(1 3) #(8 11)) (#(10 0) #(17 8)) (#(8 4) #(10 8)) (#(2 13) #(8 21)) (#(3 11) #(10 13))))
@@ -1725,6 +1769,28 @@
                 ;;X   XXXXXXXXX
                 ;;X      X
                 ;;XXXXXXXX
+                ;;
+
+                ;;
+                ;;
+                ;;
+                ;;
+                ;;
+                ;;XXXXXXXX
+                ;;X      X
+                ;;X      X    
+                ;;X      X    
+                ;;X      X    
+                ;;X      X    
+                ;;X      X    
+                ;;X      X
+                ;;X  XXXXXXX
+                ;;XXXX     X
+                ;;   X     X
+                ;;   X     X
+                ;;   X     X
+                ;;   XXXXXXX 
+                ;;
                 ;;
 
                 ;; rooms or corridors placed inside of eachother
