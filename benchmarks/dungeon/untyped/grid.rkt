@@ -1,24 +1,28 @@
 #lang racket
 
+(define-syntax ctc-level 'trace)
+
 (require
   "../base/un-types.rkt"
   require-typed-check
   ;math/array ;; TODO it'd be nice to use this
  racket/contract
+ trace-contract
  (only-in "../../../ctcs/common.rkt" or-#f/c)
  "../../../ctcs/configurable.rkt"
  "../../../ctcs/precision-config.rkt"
 )
+
 (require (only-in "cell.rkt"
 ;;   char->cell%
 ;;   void-cell%
   cell%?
-  class-equal?
 ))
-(require/configurable-contract "cell.rkt" void-cell% char->cell% )
+(require/configurable-contract "cell.rkt" void-cell% char->cell% empty-cell% cell% wall% door%)
 
 (provide/configurable-contract
- [array-set! ([max (->i ([g (arrayof cell%?)]
+ [array-set! ([trace array-set!-c/trace-ctc]
+              [max (->i ([g (arrayof cell%?)]
                          [p array-coord?]
                          [v cell%?])
                         [result void?]
@@ -146,6 +150,43 @@
 ;; (mutability is required for dungeon generation)
 (define/ctc-helper grid? (arrayof cell%?))
 
+(define (allowed-transition? from% to%)
+  (define allowed-transitions
+    `((,void-cell% . ,wall%)
+      (,void-cell% . ,empty-cell%)
+      (,wall% . ,door%)
+      (,wall% . ,wall%)))
+  (for/or ([transition allowed-transitions])
+    (match-define (cons super-from% super-to%) transition)
+    (and (subclass? from% super-from%)
+         (subclass? to% super-to%))))
+
+(define/ctc-helper array-set!-c/trace-ctc
+  (trace/c ([g grid?]
+            [p array-coord?]
+            [v cell%?])
+           (g p v . -> . void?)
+           (accumulate '()
+            [(g p v)
+            (λ (tr grid posn cell #:blame b)
+              (match-define (cons key tr/grid)
+                (or (assoc grid tr equal-always?)
+                    (cons grid (hash))))
+              (define current-cell% (hash-ref tr/grid posn void-cell%))
+              (define-values (new-cell% _) (object-info cell))
+              (if (allowed-transition? current-cell% new-cell%)
+                  (cons (cons key (hash-set tr/grid posn new-cell%))
+                        (remq key tr))
+                  (fail #:explain
+                        (λ () (raise-blame-error
+                               b
+                               array-set!
+                               (format
+                                "Tried to transition cell ~a from ~a to ~a, but this is not allowed"
+                                posn
+                                current-cell%
+                                new-cell%))))))])))
+
 ;; parses a list of strings into a grid, based on the printed representation
 ;; of each cell
 (define (parse-grid los)
@@ -233,5 +274,4 @@
   (check-true (within-grid? g2* '#(4 4)))
   (check-false (within-grid? g2* '#(0 10)))
   (check-false (within-grid? g2* '#(5 0)))
-  (check-false (within-grid? g2* '#(5 10)))
-  )
+  (check-false (within-grid? g2* '#(5 10))))

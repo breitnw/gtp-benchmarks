@@ -8,6 +8,7 @@
   "../base/un-types.rkt"
   racket/match
   racket/contract
+  trace-contract
   (only-in "../../../ctcs/common.rkt" or-#f/c)
   "../../../ctcs/precision-config.rkt"
   "../../../ctcs/configurable.rkt"
@@ -80,7 +81,8 @@
 ;;  [ITERS exact-nonnegative-integer?]
 ;;  [dungeon-height exact-nonnegative-integer?]
 ;;  [dungeon-width exact-nonnegative-integer?]
-;;  [try-add-rectangle ([max (->i ([grid grid?]
+;;  [try-add-rectangle ([trace try-add-rectangle-no-overlap-c/trace-ctc]
+;;                      [max (->i ([grid grid?]
 ;;                                 [pos (grid) (and/c array-coord?
 ;;                                                    (within-grid/c grid))]
 ;;                                 [height index?]
@@ -102,10 +104,12 @@
 ;;                                          ;; room contract, see definition of room-with/c)
 ;;                                          any/c
 ;;                                          any/c))])]
-;;                      [types (grid? array-coord? index? index? direction? 
+;;                      [types (grid? array-coord? index? index? direction?
 ;;                                    . -> .
 ;;                                    (or-#f/c any-room?))])]
-;;  [commit-room ([max (->i ([grid grid?]
+;;  [commit-room ([trace (and/c commit-room-no-overlap-c/trace-ctc
+;;                              commit-room-abuts-c/trace-ctc)]
+;;                [max (->i ([grid grid?]
 ;;                           [room any-room?])
 ;;                          [result void?]
 ;;                          #:post (grid room)
@@ -226,11 +230,184 @@
                    extension-points/c)))
 (define/ctc-helper any-room? (room-with/c any/c any/c any/c any/c any/c))
 
+;; =============================================================================
+;; TRACE CONTRACT DEFINITIONS
 
-;; -----------------------------------------------------------------------------
+;; trace contract helpers ------------------------------------------------------
+
+(define-struct rect (min-x max-x min-y max-y))
+
+(define ((interval-intersects?/min-intersection-size size) i1-min i1-max i2-min i2-max)
+  ;; add 1 to the difference between the start and end of the intersection,
+  ;; since we're working with closed intervals
+  (>= (add1 (- (min i1-max i2-max)  ;; end of intersection
+               (max i1-min i2-min))) ;; start of intersection
+      size))
+
+(define (rect-intersects? r1 r2)
+  ;; in order for two intervals to be intersecting, they need to share two cells
+  ;; (one shared cell is just abutting)
+  (define interval-intersects? (interval-intersects?/min-intersection-size 2))
+  (and (interval-intersects? (rect-min-x r1) (rect-max-x r1)
+                             (rect-min-x r2) (rect-max-x r2))
+       (interval-intersects? (rect-min-y r1) (rect-max-y r1)
+                             (rect-min-y r2) (rect-max-y r2))))
+
+;; rect-intersects? tests
+(module+ test
+  (check-equal? (rect-intersects? (rect 0 3 0 3) (rect 0 3 0 3)) #t)
+  (check-equal? (rect-intersects? (rect 0 3 0 3) (rect 0 3 3 6)) #f)
+  (check-equal? (rect-intersects? (rect 0 3 0 3) (rect 2 6 2 6)) #t)
+  (check-equal? (rect-intersects? (rect 0 3 0 3) (rect 3 6 2 6)) #f)
+
+  (check-equal? (rect-intersects? (rect 0 3 3 6) (rect 0 3 0 3)) #f)
+  (check-equal? (rect-intersects? (rect 2 6 2 6) (rect 0 3 0 3)) #t)
+  (check-equal? (rect-intersects? (rect 3 6 2 6) (rect 0 3 0 3)) #f))
+
+(define (room->rect room)
+  (let ([poss (map car (room-poss->cells room))])
+    (call-with-values
+     (lambda ()
+       (for/fold ([min-x +inf.0] [max-x -inf.0] [min-y +inf.0] [max-y -inf.0])
+                 ([pos poss])
+         (match-define (vector x y) pos)
+         (values (min min-x x) (max max-x x) (min min-y y) (max max-y y))))
+     rect)))
+
+(define (rect->string rect)
+  (format "(x: [~a, ~a], y: [~a, ~a])"
+          (rect-min-x rect) (rect-max-x rect) (rect-min-y rect) (rect-max-y rect)))
+
+(define (rect-abuts? r1 r2)
+  (define (interval-abuts? i1-min i1-max i2-min i2-max)
+    (or (= i1-min i2-max)
+        (= i2-min i1-max)))
+  (define interval-intersects-with-space-for-door?
+    (interval-intersects?/min-intersection-size 3))
+  (or (and (interval-abuts?
+            (rect-min-x r1) (rect-max-x r1)
+            (rect-min-x r2) (rect-max-x r2))
+           (interval-intersects-with-space-for-door?
+            (rect-min-y r1) (rect-max-y r1)
+            (rect-min-y r2) (rect-max-y r2)))
+      (and (interval-abuts?
+            (rect-min-y r1) (rect-max-y r1)
+            (rect-min-y r2) (rect-max-y r2))
+           (interval-intersects-with-space-for-door?
+            (rect-min-x r1) (rect-max-x r1)
+            (rect-min-x r2) (rect-max-x r2)))))
+
+;; rect-abuts? tests
+(module+ test
+  ;; overlapping
+  (check-equal? (rect-abuts? (rect 0 3 0 3) (rect 0 3 0 3)) #f)
+  (check-equal? (rect-abuts? (rect 0 3 0 3) (rect 1 4 2 6)) #f)
+
+  ;; not touching
+  (check-equal? (rect-abuts? (rect 0 3 0 3) (rect 4 7 4 7)) #f)
+
+  ;; abutting (x)
+  (check-equal? (rect-abuts? (rect 0 3 0 3) (rect 3 6 0 3)) #t)
+  (check-equal? (rect-abuts? (rect 0 3 0 3) (rect 3 6 1 4)) #t)
+  (check-equal? (rect-abuts? (rect 3 6 0 3) (rect 0 3 0 3)) #t)
+  ;; no room for door (x)
+  (check-equal? (rect-abuts? (rect 0 3 0 3) (rect 3 6 2 5)) #f)
+
+  ;; abutting (y)
+  (check-equal? (rect-abuts? (rect 0 3 0 3) (rect 0 3 3 6)) #t)
+  (check-equal? (rect-abuts? (rect 0 3 0 3) (rect 1 4 3 6)) #t)
+  (check-equal? (rect-abuts? (rect 0 3 3 6) (rect 0 3 0 3)) #t)
+  ;; no room for door (y)
+  (check-equal? (rect-abuts? (rect 0 3 0 3) (rect 3 6 2 5)) #f))
+
+;; trace contract accumulator functions ----------------------------------------
+
+;; v:      the value the contract is attached to (for raise-blame-error)
+;; commit: whether to accumulate values in the trace
+;; tr:     the trace, an association list from grids to lists of rects
+;; g:      the grid this rect was added to
+;; r:      the rect being added
+;; b:      the blame object (for raise-blame-error)
+(define (rect-no-overlap-trace-fn v #:commit [commit #t] tr g r #:blame b)
+  (match-define (cons key cur-rects)
+    (or (assoc g tr equal-always?)
+        (cons g '())))
+  (define new-rect (room->rect r))
+  (or (for/or ([cur-rect cur-rects])
+        (and (rect-intersects? new-rect cur-rect)
+             (fail #:explain
+                   (λ ()
+                     (raise-blame-error
+                      b v
+                      (format
+                       "Tried to add rect ~a, intersecting committed rect ~a"
+                       (rect->string new-rect)
+                       (rect->string cur-rect)))))))
+      (if commit
+          (cons (cons key (cons new-rect cur-rects))
+                (remq key tr))
+          tr)))
+
+;; v:   the value the contract is attached to (for raise-blame-error)
+;; tr:  the trace, an association list from grids to lists of rects
+;; g:   the grid this rect was added to
+;; r:   the rect being added
+;; b:   the blame object (for raise-blame-error)
+(define (rect-abuts-trace-fn v tr g r #:blame b)
+  (match-define (cons key cur-rects)
+    (or (assoc g tr equal-always?)
+        (cons g '())))
+  (define new-rect (room->rect r))
+  (if (not (or (empty? cur-rects)
+               (for/or ([cur-rect cur-rects])
+                 (rect-abuts? new-rect cur-rect))))
+      (fail #:explain
+            (λ ()
+              (raise-blame-error
+               b v
+               (format
+                (string-append
+                 "Rect ~a must abut another rect with space for a door.\n"
+                 "Other rects: ~a")
+                (rect->string new-rect)
+                (map rect->string cur-rects)))))
+      (cons (cons key (cons new-rect cur-rects))
+            (remq key tr))))
+
+;; Trace contracts -------------------------------------------------------------
+
+(define-values
+  (commit-room-no-overlap-c/trace-ctc try-add-rectangle-no-overlap-c/trace-ctc)
+  (trace/c ([grid-commit grid?]
+            [room-commit room?]
+            [grid-try-add grid?]
+            [room-try-add room?])
+           #:global
+           (values (-> grid-commit room-commit void?)
+                   (-> grid-try-add array-coord? index? index? direction?
+                       (or-#f/c room-try-add)))
+           (accumulate '()
+            [(grid-commit room-commit)
+             (λ (tr g r #:blame b)
+               (rect-no-overlap-trace-fn commit-room tr g r #:blame b))]
+            [(grid-try-add room-try-add)
+             (λ (tr g r #:blame b)
+               (rect-no-overlap-trace-fn commit-room tr g r #:blame b #:commit #f))])))
+
+(define commit-room-abuts-c/trace-ctc
+  (trace/c ([grid grid?]
+            [room room?])
+           (grid room . -> . void?)
+           (accumulate '()
+            [(grid room)
+             (λ (tr g r #:blame b)
+               (rect-abuts-trace-fn commit-room tr g r #:blame b))])))
+
+;; END TRACE CONTRACT DEFINITIONS
+;; =============================================================================
 
 (define N 1)
-    
+
 (define wall-cache
   ;; #:mutable
   (make-hash))
@@ -271,6 +448,9 @@
        (<= cell-x max-x)
        (>= cell-y min-y)
        (<= cell-y max-y)))
+
+;; Cannot write a trace contract for this function, since results are not
+;; deterministic
 
 (define (try-add-rectangle grid pos height width direction)
   ;; height and width include a wall of one cell wide on each side
@@ -330,9 +510,11 @@
   (and success?
        (room height width poss->cells free-cells extension-points)))
 
-
-
-
+;; mutate `grid` to add `room`
+(define (commit-room grid room)
+  (for ([pos+cell% (in-list (room-poss->cells room))])
+    (match-define (cons pos cell%) pos+cell%)
+    (array-set! grid pos (new cell%))))
 
 (define (random-direction)
   (random-from (list left right up down)))
@@ -347,9 +529,10 @@
   ; higher than that (7 11) is hard to fit
   (define w (assert (random-between 7 11) index?)) ;; rooms 
   (define h (assert (random-between 7 11) index?))
-  (let [ (r (try-add-rectangle grid pos w h dir)) ]
-    ;(displayln (format "w/h: (~a ~a), room: ~a" w h r))
-    r))
+  #;(let [ (r (try-add-rectangle grid pos w h dir)) ]
+    (displayln (format "w/h: (~a ~a), room: ~a" w h r))
+    r)
+  (try-add-rectangle grid pos w h dir))
 
 (define (new-corridor grid pos dir)
   (define h? (horizontal? dir))
@@ -364,9 +547,10 @@
          (random-between 5 8)) index?))
   (define h (if h? 3   len))
   (define w (if h? len 3))
-  (let [ (r (try-add-rectangle grid pos w h dir)) ]
-    ;(displayln (format "w/h: (~a ~a), corr: ~a" w h r))
-    r))
+  #;(let [ (r (try-add-rectangle grid pos w h dir)) ]
+    (displayln (format "w/h: (~a ~a), corr: ~a" w h r))
+    r)
+  (try-add-rectangle grid pos w h dir))
 
 
 (define/ctc-helper (door-count grid)
@@ -485,7 +669,7 @@
               [else ; didn't fit, try again
                (values n-rooms-to-go rooms extension-points)])))))
     (cond [(not (= n 0)) ; we got stuck, try again
-           ;(log-error "generate-dungeon: had to restart")
+           (log-error "generate-dungeon: had to restart")
            ;; may have gotten too ambitious with n of rooms, back off
            (set! n-rooms (max (length encounters) (sub1 n-rooms)))
            (loop)]
@@ -628,7 +812,7 @@
         [(_ _ _ _) (raise-user-error 'voidcase)])))))
 
 
-(define LOOPS 1)
+(define LOOPS 5)
 
 #;(define (main)
     ;(for ((_i (in-range LOOPS)))
@@ -682,7 +866,7 @@
                                   "......"
                                   "......"
                                   "......"
-                                  "......")));)
+                                  "......")))
      (check-false (try-add-rectangle g1 #(10 10) 3 3 right)) ; out of bounds
      (commit-room g1 (or (try-add-rectangle g1 #(2 1) 3 3 right) (error 'commit)))
      (check-equal? (show-grid g1)
@@ -693,15 +877,17 @@
                                   "......"
                                   "......")))
      (check-false (try-add-rectangle g1 #(2 2) 3 3 up))
-     (commit-room g1 (or (try-add-rectangle g1 #(3 3) 3 3 down) (error 'commit)))
-     (check-equal? (show-grid g1)
-                   (render-grid '("......"
-                                  ".XXX.."
-                                  ".X X.."
-                                  ".XXXX."
-                                  "..X X."
-                                  "..XXX.")))
-                
+
+     ;; this is (correctly) illegal according to the trace contract!
+     #;(commit-room g1 (or (try-add-rectangle g1 #(3 3) 3 3 down) (error 'commit)))
+     #;(check-equal? (show-grid g1)
+                     (render-grid '("......"
+                                    ".XXX.."
+                                    ".X X.."
+                                    ".XXXX."
+                                    "..X X."
+                                    "..XXX.")))
+
      (commit-room g2 (or (try-add-rectangle g2 #(1 1) 3 4 right) (error 'commit)))
      (check-equal? (show-grid g2)
                    (render-grid '(".XXXX."
@@ -709,7 +895,7 @@
                                   ".XXXX."
                                   "......"
                                   "......"
-                                  "......"))) ))
+                                  "......")))))
   
   ;; ============================================================================================
   ;; random testing
