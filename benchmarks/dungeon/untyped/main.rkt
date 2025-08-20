@@ -569,14 +569,6 @@
 (define/ctc-helper ((room-count>=/c n) grid)
   (>= (room-count grid) n))
 
-
-
-;; mutate `grid` to add `room`
-(define (commit-room grid room)
-  (for ([pos+cell% (in-list (room-poss->cells room))])
-    (match-define (cons pos cell%) pos+cell%)
-    (array-set! grid pos (new cell%))))
-
 ;; ll: temporal: this should display things IF `animate-generation?`
 (define (generate-dungeon encounters)
   ;; lltodo: This could be more specific: returned grid should contain

@@ -1,7 +1,5 @@
 #lang racket
 
-(define-syntax ctc-level 'trace)
-
 (require
   "../base/un-types.rkt"
   require-typed-check

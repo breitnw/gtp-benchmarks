@@ -1,8 +1,5 @@
 #lang racket/base
 
-(require (for-syntax racket/base))
-(define-syntax ctc-level 'trace)
-
 (require
  racket/set
  racket/contract
