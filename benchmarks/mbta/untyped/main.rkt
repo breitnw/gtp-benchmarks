@@ -124,7 +124,7 @@
 
 (module+ test
   (require typed/rackunit)
-  (require/configurable-contract "t-view.rkt" manage%)
+  (require "t-view.rkt")
   (define manage1 (new manage%))
   (define manage1_disable (get-field disabled manage1))
 
@@ -158,8 +158,7 @@
   ;; -- tests that the disabled list doesn't connect to anything
   ;; -- checks for incorrect inputs names into the disabled list, both putting them in and having as a real destination
   ;; -- verifies the disabled list changes when appriorate
-
-  (check-equal? (length (get-field disabled manage1)) 0)
+(check-equal? (length (get-field disabled manage1)) 0)
   (define dis_rem_out4 (send manage1 add-to-disabled "Government"))
   (check-equal? (length (get-field disabled manage1)) 1)
   (define dis_rem_out4_2 (send manage1 add-to-disabled "Riverway"))
@@ -173,7 +172,7 @@
   (check-equal? "it is currently impossible to reach Government Center Station from Bowdoin Station via subways" (send manage1 find "Bowdoin" "Government"))
   (check-equal? "it is currently impossible to reach Bowdoin Station from Riverway Station via subways" (send manage1 find "Riverway" "Bowdoin"))
   (check-equal? "it is currently impossible to reach Riverway Station from Bowdoin Station via subways" (send manage1 find "Bowdoin" "Riverway"))
-  (send manage1 remove-from-disabled "Government")
+  (define attempt (send manage1 remove-from-disabled "Government"))
   (check-equal? (length (get-field disabled manage1)) 1)
   (check-equal? '("Riverway Station") (get-field disabled manage1))
   (check-equal? "Close your eyes and tap your heels three times. Open your eyes. You will be at Government." (send manage1 find "Government" "Government"))
@@ -207,14 +206,17 @@
   (check-equal? "Close your eyes and tap your heels three times. Open your eyes. You will be at Riverway." (send manage1 find "Riverway" "Riverway"))
   (check-equal? "no such destination: brookline hills" (send manage1 find "Stony Brook" "brookline hills"))
   (check-equal? "it is currently impossible to reach Brookline Hills Station from Stony Brook Station via subways" (send manage1 find "Stony Brook" "Brookline Hills"))
-  (check-equal? #f (send manage1 add-to-disabled "Riverway"))
+  (define ts1 (send manage1 add-to-disabled "Riverway"))
+  (check-equal? #f ts1)
   (check-equal? (length (get-field disabled manage1)) 5)
   (check-equal? '("Riverway Station" "Brookline Village Station" "Stony Brook Station" "Brookline Hills Station" "Riverway Station") (get-field disabled manage1))
-  (check-equal? #f (send manage1 remove-from-disabled "Riverway"))
+  (define ts2 (send manage1 remove-from-disabled "Riverway"))
+  (check-equal? #f ts2)
   (check-equal? #t (and (boolean? (send manage1 remove-from-disabled "Riverway")) (equal? #f (send manage1 remove-from-disabled "Riverway"))))
   (check-equal? (length (get-field disabled manage1)) 3)
   (check-equal? '("Brookline Village Station" "Stony Brook Station" "Brookline Hills Station") (get-field disabled manage1))
-  (check-equal? #f (send manage1 remove-from-disabled "Riverway"))
+  (define ts3 (send manage1 remove-from-disabled "Riverway"))
+  (check-equal? #f ts3)
   (check-equal? (length (get-field disabled manage1)) 3)
   (check-equal? '("Brookline Village Station" "Stony Brook Station" "Brookline Hills Station") (get-field disabled manage1))
   (check-equal? "no such station to enable: brook" (send manage1 remove-from-disabled "brook"))
@@ -237,11 +239,12 @@
 
   ;;;;;;;;;
 
-
-  (check-equal? #f (send manage1 add-to-disabled "Sym"))
+  (define ts4 (send manage1 add-to-disabled "Sym"))
+  (check-equal? #f ts4)
   (check-equal? (length (get-field disabled manage1)) 4)
   (check-equal? '("Symphony Station" "Brookline Village Station" "Stony Brook Station" "Brookline Hills Station") (get-field disabled manage1))
-  (check-equal? #f (send manage1 remove-from-disabled "phony"));; lowercase situation that is valid; substring needs to be exactly what is in the data.rkt for it to work properly
+  (define ts5 (send manage1 remove-from-disabled "phony"))
+  (check-equal? #f ts5);; lowercase situation that is valid; substring needs to be exactly what is in the data.rkt for it to work properly
   (check-equal? (length (get-field disabled manage1)) 3)
   (check-equal? '("Brookline Village Station" "Stony Brook Station" "Brookline Hills Station") (get-field disabled manage1))
 )
