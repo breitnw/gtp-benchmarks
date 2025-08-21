@@ -837,63 +837,69 @@
 ;;............................................................
 ;;............................................................
 ;;............................................................
-;;cpu time: 8177 real time: 8175 gc time: 3379   
+;;cpu time: 8177 real time: 8175 gc time: 3379
 
+;; test setup
+(module+ test
+  (require rackunit))
 
-;; test module (test0): provides helper functions to verify properties of a given grid output
-;; also contains another version of generate_dungeon to test try-rectangle function
-(module+ test0
-  (require rackunit)
-  ;(require rackunit/text-ui)
+;; integration test 1: check that commit-room works properly by inspecting
+;; grid contents
+(module+ test
   (define (render-grid g) (string-join g "\n" #:after-last "\n"))
   (define (empty-grid)
     (build-array #(6 6) (lambda _ (new void-cell%))))
   (define g1 (empty-grid))
   (define g2 (empty-grid))
-  (define suite-1
-    (test-suite
-     "Basic Suite"
-     (check-equal? (show-grid g1)
-                   (render-grid '("......"
-                                  "......"
-                                  "......"
-                                  "......"
-                                  "......"
-                                  "......")))
-     (check-false (try-add-rectangle g1 #(10 10) 3 3 right)) ; out of bounds
-     (commit-room g1 (or (try-add-rectangle g1 #(2 1) 3 3 right) (error 'commit)))
-     (check-equal? (show-grid g1)
-                   (render-grid '("......"
-                                  ".XXX.."
-                                  ".X X.."
-                                  ".XXX.."
-                                  "......"
-                                  "......")))
-     (check-false (try-add-rectangle g1 #(2 2) 3 3 up))
+  (check-equal? (show-grid g1)
+                (render-grid '("......"
+                               "......"
+                               "......"
+                               "......"
+                               "......"
+                               "......")))
+  (check-false (try-add-rectangle g1 #(10 10) 3 3 right)) ; out of bounds
+  (commit-room g1 (or (try-add-rectangle g1 #(2 1) 3 3 right) (error 'commit)))
+  (check-equal? (show-grid g1)
+                (render-grid '("......"
+                               ".XXX.."
+                               ".X X.."
+                               ".XXX.."
+                               "......"
+                               "......")))
+  (check-false (try-add-rectangle g1 #(2 2) 3 3 up))
 
-     ;; this is (correctly) illegal according to the trace contract!
-     #;(commit-room g1 (or (try-add-rectangle g1 #(3 3) 3 3 down) (error 'commit)))
-     #;(check-equal? (show-grid g1)
-                     (render-grid '("......"
-                                    ".XXX.."
-                                    ".X X.."
-                                    ".XXXX."
-                                    "..X X."
-                                    "..XXX.")))
+  ;; this is (correctly) illegal according to the trace contract!
+  #;(commit-room g1 (or (try-add-rectangle g1 #(3 3) 3 3 down) (error 'commit)))
+  #;(check-equal? (show-grid g1)
+                  (render-grid '("......"
+                                 ".XXX.."
+                                 ".X X.."
+                                 ".XXXX."
+                                 "..X X."
+                                 "..XXX.")))
 
-     (commit-room g2 (or (try-add-rectangle g2 #(1 1) 3 4 right) (error 'commit)))
-     (check-equal? (show-grid g2)
-                   (render-grid '(".XXXX."
-                                  ".X  X."
-                                  ".XXXX."
-                                  "......"
-                                  "......"
-                                  "......")))))
-  
-  ;; ============================================================================================
-  ;; random testing
+  (commit-room g1 (or (try-add-rectangle g1 #(3 2) 3 3 down) (error 'commit)))
+  (check-equal? (show-grid g1)
+                (render-grid '("......"
+                               ".XXX.."
+                               ".X X.."
+                               ".XXX.."
+                               ".X X.."
+                               ".XXX..")))
 
+  (commit-room g2 (or (try-add-rectangle g2 #(1 1) 3 4 right) (error 'commit)))
+  (check-equal? (show-grid g2)
+                (render-grid '(".XXXX."
+                               ".X  X."
+                               ".XXXX."
+                               "......"
+                               "......"
+                               "......"))))
 
+;; provide helper functions to verify properties of a given grid output, as well
+;; as another version of generate_dungeon to test try-add-rectangle
+(module+ test
   (define room_count (box 0))
   (define corridor_count (box 0))
   (define door_count (box 0))
@@ -1100,10 +1106,7 @@
           (cond [(not (equal? (new empty-cell%) (grid-ref grid1 (vector i j)))) 
                  (set! indi #f)]
                 [else
-                 (set! count (+ count 1))])
-          )      
-        )
-      )
+                 (set! count (+ count 1))]))))
     (and indi (equal? count (empty-counter grid1))))
   ;; ============================================================================================  
   (define (doors-correct-placement? grid)
@@ -1484,8 +1487,9 @@
              (define c55 (is-between? (unbox room-boundaries) #t))
              grid]))))
 
-;; test module (test1): runs tests on genreate dungeon with the helper functions from test0 module
-(module+ test1
+;; integration test 2: runs tests on genreate dungeon with the helper functions
+;; from the previous module
+(module+ test
   (require rackunit)
   (for ([i (in-range 1)])
     (define grid-real (generate-dungeon (range N)))
@@ -1513,8 +1517,10 @@
     (check-true (is-all-empty? grid-real room-corridor-lst))
     (check-true (doors-correct-placement? grid-real))))
 
-;; test mdoule (test2): runs tests on the local generate dungeon in test0, testing not only the helper functions correctness, but also functions called by generate dungeon like try-rectangle
-(module+ test2
+;; integration test 3: runs tests on the local generate-dungeon-loc, testing not
+;; only the helper functions correctness, but also functions called by generate
+;; dungeon like try-rectangle
+(module+ test
   (require rackunit)
   (for ([i (in-range 1)])
     (define gridout (generate-dungeon-loc (range N)))
