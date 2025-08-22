@@ -6,3 +6,5 @@
 *.swn
 compiled/
 *.DS_Store
+benchmarks-mutation/*/untyped/
+benchmarks-mutation/*/tests/
