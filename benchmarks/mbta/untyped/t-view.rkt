@@ -119,31 +119,33 @@
 
 ;; ---------------------------------------------------------------------------------------------------
 
-(define/match (in-path-before-reenable? station s)
-  [(_ (stream)) #f]
-  [(_station (stream* (list 'enable _station) _rest)) #f]
-  [(_ (stream* `(find ,path) rest))
-   (or (and (string-contains? path station)
-            (not (string-contains? path "no such"))
-            (not (string-contains? path "disambiguate"))
-            (not (string-contains? path "impossible"))
-            (not (string-contains? path "tap your heels")))
-       (in-path-before-reenable? station rest))]
-  [(_ (stream* _ rest))
-   (in-path-before-reenable? station rest)])
+(define/ctc-helper (in-path-before-reenable? station s)
+  (match (cons station s)
+    [(cons _ (stream)) #f]
+    [(cons _station (stream* (list 'enable _station) _rest)) #f]
+    [(cons _ (stream* `(find ,path) rest))
+     (or (and (string-contains? path station)
+              (not (string-contains? path "no such"))
+              (not (string-contains? path "disambiguate"))
+              (not (string-contains? path "impossible"))
+              (not (string-contains? path "tap your heels")))
+         (in-path-before-reenable? station rest))]
+    [(cons _ (stream* _ rest))
+     (in-path-before-reenable? station rest)]))
 
-(define/match (no-disabled-in-found-paths? _s)
-  [((stream)) #t]
-  ;; failed disable: multiple or zero candidates
-  [((stream* `(disable (,_stations ...)) rest))
-   (no-disabled-in-found-paths? rest)]
-  ;; successful disable
-  [((stream* `(disable ,station) rest))
-   (and (not (in-path-before-reenable? station rest))
-        (no-disabled-in-found-paths? rest))]
-  ;; skip any other action
-  [((stream* _ rest))
-   (no-disabled-in-found-paths? rest)])
+(define/ctc-helper (no-disabled-in-found-paths? s)
+  (match s
+    [(stream) #t]
+    ;; failed disable: multiple or zero candidates
+    [(stream* `(disable (,_stations ...)) rest)
+     (no-disabled-in-found-paths? rest)]
+    ;; successful disable
+    [(stream* `(disable ,station) rest)
+     (and (not (in-path-before-reenable? station rest))
+          (no-disabled-in-found-paths? rest))]
+    ;; skip any other action
+    [(stream* _ rest)
+     (no-disabled-in-found-paths? rest)]))
 
 (define/ctc-helper manage-c/trace-ctc
   (trace/c ([t string?])

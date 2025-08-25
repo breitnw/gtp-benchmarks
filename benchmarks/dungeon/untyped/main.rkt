@@ -237,14 +237,14 @@
 
 (define-struct rect (min-x max-x min-y max-y))
 
-(define ((interval-intersects?/min-intersection-size size) i1-min i1-max i2-min i2-max)
+(define/ctc-helper ((interval-intersects?/min-intersection-size size) i1-min i1-max i2-min i2-max)
   ;; add 1 to the difference between the start and end of the intersection,
   ;; since we're working with closed intervals
   (>= (add1 (- (min i1-max i2-max)  ;; end of intersection
                (max i1-min i2-min))) ;; start of intersection
       size))
 
-(define (rect-intersects? r1 r2)
+(define/ctc-helper (rect-intersects? r1 r2)
   ;; in order for two intervals to be intersecting, they need to share two cells
   ;; (one shared cell is just abutting)
   (define interval-intersects? (interval-intersects?/min-intersection-size 2))
@@ -264,7 +264,7 @@
   (check-equal? (rect-intersects? (rect 2 6 2 6) (rect 0 3 0 3)) #t)
   (check-equal? (rect-intersects? (rect 3 6 2 6) (rect 0 3 0 3)) #f))
 
-(define (room->rect room)
+(define/ctc-helper (room->rect room)
   (let ([poss (map car (room-poss->cells room))])
     (call-with-values
      (lambda ()
@@ -274,11 +274,11 @@
          (values (min min-x x) (max max-x x) (min min-y y) (max max-y y))))
      rect)))
 
-(define (rect->string rect)
+(define/ctc-helper (rect->string rect)
   (format "(x: [~a, ~a], y: [~a, ~a])"
           (rect-min-x rect) (rect-max-x rect) (rect-min-y rect) (rect-max-y rect)))
 
-(define (rect-abuts? r1 r2)
+(define/ctc-helper (rect-abuts? r1 r2)
   (define (interval-abuts? i1-min i1-max i2-min i2-max)
     (or (= i1-min i2-max)
         (= i2-min i1-max)))
@@ -328,7 +328,7 @@
 ;; g:      the grid this rect was added to
 ;; r:      the rect being added
 ;; b:      the blame object (for raise-blame-error)
-(define (rect-no-overlap-trace-fn v #:commit [commit #t] tr g r #:blame b)
+(define/ctc-helper (rect-no-overlap-trace-fn v #:commit [commit #t] tr g r #:blame b)
   (match-define (cons key cur-rects)
     (or (assoc g tr equal-always?)
         (cons g '())))
@@ -353,7 +353,7 @@
 ;; g:   the grid this rect was added to
 ;; r:   the rect being added
 ;; b:   the blame object (for raise-blame-error)
-(define (rect-abuts-trace-fn v tr g r #:blame b)
+(define/ctc-helper (rect-abuts-trace-fn v tr g r #:blame b)
   (match-define (cons key cur-rects)
     (or (assoc g tr equal-always?)
         (cons g '())))
@@ -376,7 +376,8 @@
 
 ;; Trace contracts -------------------------------------------------------------
 
-(define-values
+;; TODO use define/ctc-helper
+#;(define-values
   (commit-room-no-overlap-c/trace-ctc try-add-rectangle-no-overlap-c/trace-ctc)
   (trace/c ([grid-commit grid?]
             [room-commit room?]
@@ -394,7 +395,7 @@
              (λ (tr g r #:blame b)
                (rect-no-overlap-trace-fn commit-room tr g r #:blame b #:commit #f))])))
 
-(define commit-room-abuts-c/trace-ctc
+(define/ctc-helper commit-room-abuts-c/trace-ctc
   (trace/c ([grid grid?]
             [room room?])
            (grid room . -> . void?)

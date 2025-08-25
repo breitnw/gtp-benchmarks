@@ -1,5 +1,7 @@
 #lang racket/base
 
+(require trace-contract)
+
 (require
  racket/set
  racket/contract
@@ -21,7 +23,7 @@
 ;; IDEA: also validate the number of cards played in a given round. although
 ;; this might not be possible: deck.rkt can't see the number of players,
 ;; but the number of cards is calculated as (+ STACKS (* HAND n-players))
-(define create-deck-trace/c
+(define/ctc-helper create-deck-trace/c
   (trace/c ([reset-marker any/c]
             [c card?])
            ;; NOTE: We can't put a collector contract on the cards0 field of
@@ -38,10 +40,8 @@
              (replace (any/c (listof card?) c . -> . natural-number/c))))
            (accumulate (set)
                        [(reset-marker) (λ (_tr _val)
-                                         (displayln "resetting trace")
                                          (set))]
                        [(c) (λ (tr card)
-                              (displayln card)
                               (if (set-member? tr card)
                                   (fail)
                                   (set-add tr card)))])))

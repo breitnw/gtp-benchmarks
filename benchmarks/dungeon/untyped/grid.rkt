@@ -148,7 +148,7 @@
 ;; (mutability is required for dungeon generation)
 (define/ctc-helper grid? (arrayof cell%?))
 
-(define (allowed-transition? from% to%)
+(define/ctc-helper (allowed-transition? from% to%)
   (define allowed-transitions
     `((,void-cell% . ,wall%)
       (,void-cell% . ,empty-cell%)
