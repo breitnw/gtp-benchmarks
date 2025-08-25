@@ -127,7 +127,7 @@
   (require "t-view.rkt")
   (define manage1 (new manage%))
   (define manage1_disable (get-field disabled manage1))
-
+  (check-not-exn (λ () (main)))
   ;; add one station to the disabled list
   (check-equal? '() manage1_disable)
   (define dis_add_out1 (send manage1 add-to-disabled "Government"))
@@ -172,6 +172,7 @@
   (check-equal? "it is currently impossible to reach Government Center Station from Bowdoin Station via subways" (send manage1 find "Bowdoin" "Government"))
   (check-equal? "it is currently impossible to reach Bowdoin Station from Riverway Station via subways" (send manage1 find "Riverway" "Bowdoin"))
   (check-equal? "it is currently impossible to reach Riverway Station from Bowdoin Station via subways" (send manage1 find "Bowdoin" "Riverway"))
+  (check-false? "it is currently impossible to reach Riverway Station from Bowdoin Station via subways" (send manage1 find "Bowdoin" "Suffolk"))
   (define attempt (send manage1 remove-from-disabled "Government"))
   (check-equal? (length (get-field disabled manage1)) 1)
   (check-equal? '("Riverway Station") (get-field disabled manage1))
