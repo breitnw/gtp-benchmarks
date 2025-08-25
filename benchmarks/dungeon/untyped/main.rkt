@@ -841,7 +841,7 @@
 
 ;; test setup
 (module+ test
-  (require rackunit))
+  (require (only-in rackunit check-equal? check-false check-true current-check-around)))
 
 ;; integration test 1: check that commit-room works properly by inspecting
 ;; grid contents
@@ -1490,7 +1490,6 @@
 ;; integration test 2: runs tests on genreate dungeon with the helper functions
 ;; from the previous module
 (module+ test
-  (require rackunit)
   (for ([i (in-range 1)])
     (define grid-real (generate-dungeon (range N)))
     (display (show-grid grid-real))
@@ -1521,7 +1520,6 @@
 ;; only the helper functions correctness, but also functions called by generate
 ;; dungeon like try-rectangle
 (module+ test
-  (require rackunit)
   (for ([i (in-range 1)])
     (define gridout (generate-dungeon-loc (range N)))
     (display (show-grid gridout))

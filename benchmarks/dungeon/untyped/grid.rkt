@@ -246,7 +246,7 @@
 
 
 (module+ test
-  (require rackunit)
+  (require (only-in rackunit check-equal? check-false check-true current-check-around))
 
 
   (define (parse-and-show los) (show-grid (parse-grid los)))
