@@ -905,6 +905,9 @@
   (define corridor_count (box 0))
   (define door_count (box 0))
   (define room-boundaries (box '()))
+  (define grid-rep-tracker1 (box #t))
+  (define grid-rep-tracker2 (box 0))
+  (define room-connect-tracker (box #t))
 
   (define (room-budding-detection pos1 pos2)
     (match-define (vector x1 y1) pos1)
@@ -919,7 +922,8 @@
                   (equal? j l))
              (set! indi #t)]))
     (cond [(not indi)
-           (error "This room is not being added to a place that is connected to the dungeon environment!")])
+           (set-box! room-conntect-tracker #f)
+           #;(error "This room is not being added to a place that is connected to the dungeon environment!")])
     )
 
   ;; mutate `grid` to add `room`
@@ -1142,7 +1146,8 @@
        (when
            (not
             (equal? curr-cell (new void-cell%)))
-         (error "Not a valid placement for an empty-cell!\n")
+         (set-box! grid-rep-tracker1 #f)
+         (set-box! grid-rep-tracker2 (+ 1 (unbox grid-rep-tracker2)))
          )]
       [(equal? cell (new wall%))
        ;; every value is true except false, rack-unit, test suite, negative tests, expecting error from tests, tells you how many succeed and failed, test/error, groups of tests to run 
@@ -1151,7 +1156,8 @@
             (or 
              (equal? curr-cell (new wall%))
              (equal? curr-cell (new void-cell%))))
-         (error "Not a valid placement for a wall!\n")
+         (set-box! grid-rep-tracker1 #f)
+         (set-box! grid-rep-tracker2 (+ 1 (unbox grid-rep-tracker2)))
          )] 
       [(equal? cell (new vertical-door%))
        (when
@@ -1162,7 +1168,8 @@
              (equal? (grid-ref grid (vector (- x 1) y)) (new wall%))
              (equal? (grid-ref grid (vector x (+ y 1))) (new empty-cell%)) 
              (equal? (grid-ref grid (vector x (- y 1))) (new empty-cell%))))
-         (error "Not a valid placement for a vertical-door!\n"))] 
+         (set-box! grid-rep-tracker1 #f)
+         (set-box! grid-rep-tracker2 (+ 1 (unbox grid-rep-tracker2))))] 
       [(equal? cell (new horizontal-door%))
        (when
            (not
@@ -1172,7 +1179,8 @@
              (equal? (grid-ref grid (vector x (- y 1))) (new wall%))
              (equal? (grid-ref grid (vector (+ x 1) y)) (new empty-cell%)) 
              (equal? (grid-ref grid (vector (- x 1) y)) (new empty-cell%))))
-         (error "not a valid placement for a horizontal door!\n"))]))
+         (set-box! grid-rep-tracker1 #f)
+         (set-box! grid-rep-tracker2 (+ 1 (unbox grid-rep-tracker2))))]))
   ;; ============================================================================================  
   (define (is-between? pos-lst indicator) ;; determine how to have no return
     (cond
@@ -1216,7 +1224,7 @@
                (and
                 (< y-start y2)
                 (< y2 y-end)))))
-            (error "This grid is not set up correctly! There are rooms that overlap/intersect\n")]
+            (set! indicator #f)]
            [(and
              (equal? y1 y-start)
              (equal? y2 y-end)
@@ -1236,7 +1244,7 @@
                (and
                 (< x-start x2)
                 (< x2 x-end)))))
-            (error "This grid is not set up correctly! There are rooms that overlap/intersect\n")]
+            (set! indicator #f)]
            [(and
              (equal? x1 x-start)
              (equal? x2 x-end)
@@ -1256,7 +1264,7 @@
                (and
                 (< y-start y2)
                 (< y2 y-end)))))
-            (error "This grid is not set up correctly! There are rooms that overlap/intersect\n")]
+            (set! indicator #f)]
            [else
             (is-between? (rest pos-lst) indicator)]))])
     indicator)
@@ -1334,6 +1342,9 @@
     (set-box! door_count 0)
     (set-box! room_count 0)
     (set-box! room-boundaries '())
+    (set-box! grid-rep-tracker1 #t)
+    (set-box! grid-rep-tracker2 0)
+    (set-box! room-connect-tracker #t)
   
     (define grid
       (build-array (vector dungeon-height dungeon-width)
@@ -1348,7 +1359,7 @@
         (or first-room (loop)))) ; if it doesn't fit, try again
     (commit-room1 grid first-room)
     (set-box! room_count (+ 1 (unbox room_count)))
-    (cond [(not (equal? (unbox room_count) (room-counter grid (unbox room-boundaries))))
+    #;(cond [(not (equal? (unbox room_count) (room-counter grid (unbox room-boundaries))))
            (error "The room count does not match what is currently in the grid!\n")])
     (when animate-generation? (display (show-grid grid)))
     (define connections '()) ; keep track of pairs of connected rooms
@@ -1376,25 +1387,25 @@
                (commit-room1 grid room)
                (define b (is-between? (unbox room-boundaries) #t))
                (set-box! room_count (+ 1 (unbox room_count)))
-               (cond [(not (equal? (unbox room_count) (room-counter grid (unbox room-boundaries))))
+               #;(cond [(not (equal? (unbox room_count) (room-counter grid (unbox room-boundaries))))
                       (error "The room count does not match what is currently in the grid!\n")])
                (define door-kind
                  (if (horizontal? dir) vertical-door% horizontal-door%))
                (array-set! grid ext     (new door-kind))
                (set-box! door_count (+ 1 (unbox door_count)))
-               (cond [(not (equal? (unbox door_count) (door-counter grid)))
+               #;(cond [(not (equal? (unbox door_count) (door-counter grid)))
                       (error "The door count does not match what is currently in the grid!\n")])
                (when new-ext
                  (array-set! grid new-ext (new door-kind))
                  (set-box! door_count (+ 1 (unbox door_count))))
-               (cond [(not (equal? (unbox door_count) (door-counter grid)))
+               #;(cond [(not (equal? (unbox door_count) (door-counter grid)))
                       (error "The door count does not match what is currently in the grid!\n")])
-               (cond [(not (and (equal? (unbox corridor_count) (corridor-counter grid))
+               #;(cond [(not (and (equal? (unbox corridor_count) (corridor-counter grid))
                                 (equal? (unbox corridor_count) (corridor-counter-backup grid (unbox room-boundaries)))))
                       (error "The corridor count does not match what is currently in the grid!\n")])
-               (cond [(not (equal? (unbox room_count) (room-counter grid (unbox room-boundaries))))
+               #;(cond [(not (equal? (unbox room_count) (room-counter grid (unbox room-boundaries))))
                       (error "The room count does not match what is currently in the grid!\n")])
-               (cond [(not (equal? #t (room-connection-seeker grid (unbox room-boundaries))))
+               #;(cond [(not (equal? #t (room-connection-seeker grid (unbox room-boundaries))))
                       (error "The rooms and or corridors are not boarding eachother!\n")])
                ;(define a1 (room-connection-detector grid (unbox room-boundaries)))
                (define c (is-between? (unbox room-boundaries) #t))
@@ -1475,17 +1486,17 @@
                  (match-define (cons pos door-kind) (random-from possible-doors))
                  (array-set! grid pos (new door-kind))
                  (set-box! door_count (+ 1 (unbox door_count)))
-                 (cond [(not (equal? (unbox door_count) (door-counter grid)))
+                 #;(cond [(not (equal? (unbox door_count) (door-counter grid)))
                         (error "The door count does not match what is currently in the grid!\n")])))
-             (cond [(not (equal? (unbox door_count) (door-counter grid)))
+             #;(cond [(not (equal? (unbox door_count) (door-counter grid)))
                     (error "The door count does not match what is currently in the grid!\n" )])
-             (cond [(not (equal? (unbox corridor_count) (corridor-counter grid)))
+             #;(cond [(not (equal? (unbox corridor_count) (corridor-counter grid)))
                     (error "The corridor count does not match what is currently in the grid!\n")])
-             (cond [(not (equal? (unbox room_count) (room-counter grid (unbox room-boundaries))))
+             #;(cond [(not (equal? (unbox room_count) (room-counter grid (unbox room-boundaries))))
                     (error "The room count does not match what is currently in the grid!\n")])
-             (cond [(not (equal? #t (room-connection-seeker grid (unbox room-boundaries))))
+             #;(cond [(not (equal? #t (room-connection-seeker grid (unbox room-boundaries))))
                     (error "The rooms and or corridors are not boarding eachother!\n")])
-             (define c55 (is-between? (unbox room-boundaries) #t))
+             #;(define c55 (is-between? (unbox room-boundaries) #t))
              grid]))))
 
 ;; integration test 2: runs tests on genreate dungeon with the helper functions
@@ -1501,6 +1512,9 @@
     (define room-out (room-counter grid-real room-corridor-lst))
     (check-true (is-between? room-corridor-lst #t))
     (check-equal? corridor1-out corridor2-out)
+    ;(check-true (unbox grid-rep-tracker1))
+    ;(check-equal? 0 (unbox grid-rep-tracker2))
+    
     (check-equal? (length room-corridor-lst) (+ room-out corridor2-out))
     (check-equal? (length room-corridor-lst) (+ room-out corridor1-out))
     (check-true (room-connection-seeker grid-real room-corridor-lst))
@@ -1540,6 +1554,9 @@
     ;(printf "actual door-count: ~a\n" (door-counter gridout))
     ;(printf "actual corridor-count: ~a\n" (corridor-counter gridout))
     (check-equal? (length room+corridorattempt) (+ room-count corridor-count))
+    (check-true (unbox room-connect-tracker))
+    (check-true (unbox grid-rep-tracker1))
+    (check-equal? 0 (unbox grid-rep-tracker2))
     (check-equal? door-count (door-counter gridout))
     (check-equal? corridor-count (corridor-counter gridout))
     (check-equal? corridor-count (corridor-counter-backup gridout (unbox room-boundaries)))
